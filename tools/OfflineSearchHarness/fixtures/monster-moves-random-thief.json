@@ -1,0 +1,8 @@
+[
+  {
+    "monsterId": "ThievingHopper",
+    "moveId": "THIEVERY_MOVE",
+    "clearPlayerPilesBeforeMove": true,
+    "clearPlayerHandBeforeMove": true
+  }
+]

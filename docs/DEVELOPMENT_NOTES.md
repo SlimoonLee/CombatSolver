@@ -2,6 +2,7 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 2026-09-29 晚随机怪物分组代表：来源清单与分组（21 个随机分支怪物按意图构成五组 + 6 个效果随机怪物）入档；组代表经 MonsterMoveChecks 严格差分——随机召唤（组装师 FABRICATE_MOVE，FABRICATOR_NORMAL 遭遇召唤槽）与随机偷牌（偷窃草蜢 THIEVERY_MOVE）Passed，分支代表（雾菇 SWIPE_MOVE→BRANCH 链）夹具入库待无头基础设施重跑（瞬态）。教训：分支态不能直接强制（需经 FollowUp 链）、召唤怪需其专属遭遇槽位。清单与后续见[随机怪物来源清单](strategy/blind-rng-monsters-20260929.md)。
 - 2026-09-29 晚回合开始时序族验收：大帽子（NECROBINDER，虚化生成回合末消耗）与橙色团块（无色存活）经新增的 `initial-relic` 审计模式验收（各 6 项：开局手牌恰 2 张互异生成牌、两回合模拟/原生 Stamp 对账、生成区计数证明只触发一次）；工具箱引用既有 INITIAL-TOOLBOX-INFUSED-CORE 原生验收。教训：宿主注入 clearPlayerPiles 会清掉开局生成（此类夹具不能清牌堆）、IRONCLAD 池无虚化牌（大帽子换 NECROBINDER）。零行为源码改动。报告见[回合开始时序族验收](strategy/blind-rng-turnstart-20260929.md)。
 - 2026-09-29 晚探寻打击完整验收：此前"镜像不完整"为误判（同敌方 HP 教训同型），选择链（OwnChoice→BuildSeekerSpec 抽牌堆随机候选+MoveToHand 移动语义）一直完整；真实差异是模拟候选序未贴原版 FromCombatPile 的 (Rarity, Id) 屏幕排序——已修 BuildSeekerSpec；恢复 policy/audit 夹具与名单，新增 BlindPolicyChecks 原生卡牌选择接管段（原生候选与预测候选逐实例一致、同首候选、整场对账、live 根不变），policy 18 + audit 26 全过，攻击药水/攻击 policy 回归一致。无人测试 308 同晚重跑 Passed（准入超时为瞬时状态）。改动：src/Search/CardChoiceSupport.cs（排序）+ 工具层；已部署。
 - 2026-09-29 异化水集成缺口修复：盲估值中 `PotionPolicyUnsatisfiedException` 的根因是搜索节点继承快照整场用药计数——用药后的观察根让每条新路线都被记为一次显式用药（对照实验证明弃牌重抽配全创伤手牌同样触发，非异化水特有）。新增 `ZeroInheritedPotionUse` 政策位：盲续搜（内层决策与最终排序）只按本次搜索新增的用药评估，药水的整场核算仍由外层可执行轨迹与既有快照字段承担；政策仍不可满足时盲决策与发现阶段回退免药重试（已定义业务分支，非宽泛捕获）。异化水 policy 10 项转绿，40 个 policy 夹具、既有审计、正反例与 121 项合同全部回归一致，Mod 已同源码部署。
