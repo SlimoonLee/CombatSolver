@@ -130,3 +130,12 @@ internal static class BlindSearchContracts
             hiddenInputIndependence = true, sourceUnchanged = true };
     }
 }
+
+internal sealed partial class CombatBeamSolver
+{
+    internal SimulationSnapshot ReplayBlindAuditForTesting(IReadOnlyList<PlanAction> actions)
+    {
+        using IDisposable isolation = SimulationNotificationIsolation.Enter();
+        return Replay(actions, allowExecutionCapture: false);
+    }
+}

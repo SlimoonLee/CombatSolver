@@ -1,0 +1,14 @@
+{
+  "scenarioId": "BLIND-DELAYED-ENERGY-AUDIT",
+  "characterId": "SILENT",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-delayed-energy-20260928",
+  "enemyCurrentHp": 10,
+  "initialPlayerEnergy": 3,
+  "clearRunDeck": true,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "OUTMANEUVER", "pile": "Hand" },
+    { "cardId": "STRIKE_SILENT", "pile": "Draw", "count": 5 }
+  ]
+}

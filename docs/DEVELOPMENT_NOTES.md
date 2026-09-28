@@ -2,6 +2,10 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 合并 `origin/main@7236330`（0.47.2 及 PR #144 后续 GC 修复），保留 blind 搜索和原生 rollout。上游共享动作准备入口完成适配；修复并行 worker 未继承首动作约束的合并遗漏。同配置 DOP1/DOP2 的首命令、完整评估矩阵、1800 展开/5999 转移及非调度、非缓存剪枝计数一致，实际最大并发为 2。
+- 新增 `OFFLINE_HARNESS_BLIND_AUDIT` 最小审计入口和六个夹具。攻击/技能药水、`OROBIC_ACID`、添柴在真实九流各推进 17 次、隐藏抽牌序反转及预测期间 live RNG 再扰动后保持同 seed 的完整结果一致；独立种子确实改变生成结果。原生语义 oracle 对账完整 continuation 与 RNG，四项分别通过 35/35/26/26 个检查。
+- `OUTMANEUVER` 延迟能量正反例通过 17/22 项检查：当下耗 1 能量、下回合实际 5 能量；正例选择铺垫，比结束回合少掉 1 HP；可立即击杀的反例选择打击，比铺垫少掉 4 HP。正例另做原生两回合完整对账。
+- 此次没有证明全局可见信息白名单：怪物内部状态和第三方隐藏字段仍待核查。样本内确定化未来可能产生乐观估值，Coordinator 发现与普通 Beam 复评的复杂计划能力也可能不同；`FirstLegal` 对攻击/技能药水选 0 张，采样选牌闭环尚未实现。测试的独立第一可见牌选择器只验证语义。范围、配置和证据见[专项核查](strategy/blind-rng-audit-20260928.md)。
 - 复用现有 C# 语义后端和无 Godot 的 OfflineSearchHarness。`FromSampleSeed` / `ForkWithSampleSeed` / `ForkForSample` 独立生成九条战斗流，并规范排序、重排未知抽牌顺序；`--blind-known-top` 仅保留观察者显式声明的已知前缀。未来意图从采样分支重建，未来怪物创建继承采样 run RNG，确定药水奖励预测关闭。
 - `SolveBlind` 先发现各样本的首命令候选，再补入 EndTurn，将每个候选在全部样本上约束首动作重搜。均分、尾部战损、存活与完整胜利比例由完整矩阵计算，避免只平均赢得该动作的幸运样本。串行和并行展开共享约束；确定性模式默认不启用约束。
 - OfflineSearchHarness 增加 `--blind-samples`、`--blind-seed`、`--blind-aggregation` 和 `--blind-known-top`。`route.json` / `planActions` 只写当前命令，样本选牌及后续路线不导出，续用为空；`blindPolicy` 写发现证据、评估矩阵、动作统计和总工作量。普通指标仍属于代表样本，以 `metricScope=representative_sample` 标识。

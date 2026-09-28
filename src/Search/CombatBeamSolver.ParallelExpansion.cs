@@ -405,6 +405,7 @@ internal sealed partial class CombatBeamSolver
             potionFreePolicyBaseline: _potionFreePolicyBaseline,
             maximumPotionUses: _maximumPotionUses,
             earliestPotionTurn: _earliestPotionTurn,
+            initialActionConstraint: _initialActionConstraint,
             planCommitment: _planCommitment);
         worker._run.InitialPersistentBuffValue = _run.InitialPersistentBuffValue;
         worker._run.InitialEnemyStrengthSuppression = _run.InitialEnemyStrengthSuppression;

@@ -1,0 +1,13 @@
+{
+  "scenarioId": "BLIND-OROBIC-ACID-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260928",
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ],
+  "potions": [{ "potionId": "OROBIC_ACID" }]
+}

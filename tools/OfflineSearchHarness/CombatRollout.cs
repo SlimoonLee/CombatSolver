@@ -135,7 +135,7 @@ internal static class CombatRollout
         return remaining;
     }
 
-    private static GameAction CreateAction(CombatState combat, Player player, PlanAction command)
+    internal static GameAction CreateAction(CombatState combat, Player player, PlanAction command)
     {
         if (command.Turn != player.PlayerCombatState!.TurnNumber)
             throw new InvalidOperationException("Blind command turn mismatch.");

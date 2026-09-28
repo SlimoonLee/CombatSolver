@@ -15,6 +15,24 @@
 
 夹具位于 `tools/OfflineSearchHarness/fixtures/`；以上单步证据目录位于外层工作区 `.local/`，未纳入提交。合同不替代原生 actual/simulated 严格对拍。
 
+### 同步上游后的随机效果与延迟收益专项核查
+
+证据根为本仓库 `.local/blind-audit-20260928/`。随机效果与延迟收益用 M1 专项入口、blind seed 902828、Beam 12、300 nodes、3000 ms、DOP1；随机效果各四个样本，跨回合首动作对照各三个样本。
+
+| 场景 | 结果 | 证据目录 |
+|---|---|---|
+| 攻击药水 `blind-attack-potion.json` / `effects` | Passed 35 项：真实 RNG/隐藏牌序及预测期间 live RNG 扰动不影响同 seed 效果，原生完整 continuation/RNG 一致 | `verified-attack-potion` |
+| 技能药水 `blind-skill-potion.json` / `effects` | Passed 35 项：同上；0..1 选择边界、选中牌本回合免费 | `verified-skill-potion` |
+| `OROBIC_ACID` / `blind-orobic-acid.json` / `effects` | Passed 26 项：攻击/技能/能力各一张，直接进手牌，本回合免费；原生完整对账 | `final-orobic-acid` |
+| 添柴 `blind-stoke.json` / `effects` | Passed 26 项：消耗四张其余手牌并随机生成四张，完整消耗/生成/RNG 与原生一致；本轮只执行未升级版 | `final-stoke` |
+| 延迟能量正例 `blind-delayed-energy.json` / `delayed` | Passed 17 项：当前支付 1 能量、下回合 5 能量；铺垫预测战损 0、EndTurn 为 1，production blind 选铺垫；原生两回合完整对账 | `final-delayed-energy` |
+| 即时击杀反例 `blind-delayed-energy-lethal.json` / `immediate` | Passed 22 项：打击预测战损 0、铺垫/EndTurn 为 4；production blind 选打击 | `final-delayed-energy-lethal` |
+| 并行首动作约束回归 | `blind-potion.json` / 3 samples / MeanScore / 300 nodes / 1500 ms / DOP1、DOP2；矩阵、首命令、1800 展开/5999 转移一致，实际并发 2；差异仅调度与 lane 缓存计数 | `merged-smoke-serial`、`merged-smoke-fixed` |
+| 既有采样合同 | Passed 121 项；九流、Fork、隐藏输入独立性与源根不变 | `merged-smoke-fixed/blind-checks.json` |
+| 本轮构建与 Windows 结构门禁 | Mod 和最终宿主 Release 0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=239`；复用同源码构建作本地部署 | 本轮命令输出 |
+
+六项专项合计 161 个检查。并行烟测最终只有 EndTurn 一个提名候选；四个随机效果停在效果完成，不是整场质量验证。原生三选一测试使用独立的第一可见牌选择器，不能证明 production 已实现合理选牌；`FirstLegal` 的可跳过药水会选 0 张。全局根字段可见性、样本内乐观估值与复杂长期计划复评均未保证，见[专项报告](strategy/blind-rng-audit-20260928.md)。
+
 ### 原生命令 rollout 与用户历史指导
 
 共同配置为 3 samples、MeanScore、blind seed 902828、Beam 12、300 nodes、每样本发现预算 300 ms、DOP1、FirstLegal、请求总时限 120 秒。证据位于本仓库 `.local/blind-native/`；原始存档与完整日志未纳入提交。

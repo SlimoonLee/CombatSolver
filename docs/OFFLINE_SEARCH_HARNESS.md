@@ -93,6 +93,10 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
 
 可选设置 `OFFLINE_HARNESS_BLIND_CHECKS=1`，在本次根上运行 121 项采样、RNG/Fork 隔离和聚合合同并写出 `blind-checks.json`。可重跑的小夹具为 `tools/OfflineSearchHarness/fixtures/blind-endturn.json` 与 `blind-potion.json`；分别覆盖零能量 EndTurn 和药水首命令约束。这些合同验证 blind 入口，不替代完整游戏的原生差分。
 
+设置 `OFFLINE_HARNESS_BLIND_AUDIT=effects`，配合 `--milestone M1` 和 `blind-attack-potion.json`、`blind-skill-potion.json`、`blind-orobic-acid.json` 或 `blind-stoke.json`，运行随机生成效果的隐藏输入扰动与原生完整 continuation/RNG 对账。`delayed` 配合 `blind-delayed-energy.json`，`immediate` 配合 `blind-delayed-energy-lethal.json`，核对跨回合能量及首动作选择；输出 `blind-audit.json`。专项入口会推进宿主内的原生战斗，应单独运行，不与正常 M2 搜索或 rollout 混用。配置、检查数和证明范围见[专项核查](strategy/blind-rng-audit-20260928.md)。
+
+此处的“隐藏输入独立性”仅覆盖已扰动的真实 RNG 和未知抽牌顺序。根中的怪物内部状态和第三方隐藏字段尚未完成可见性白名单核查，不能宣称整个入口严格只使用玩家可见信息。发现阶段用 Coordinator，首动作复评用普通 Beam，复杂长期计划的搜索能力也不完全一致。
+
 ## 玩家存档与原生战斗推进
 
 ```powershell
@@ -121,6 +125,7 @@ M2 和 `--blind-known-top 0`，不将开局堆顶知识传播到后续动作。
   再等待稳定 Play 或战斗结束；每条首命令后重新捕获根，样本选择和跨回合续用均不部署。
 - `Stop` 遇到需要决策的原生选牌会报告未支持；`FirstLegal` 只选实际候选中的前 `minSelect` 张，
   是可见候选基线，不是未知 RNG 的采样选牌策略。战后选牌使用历史记录，不使用这条战斗内基线。
+  攻击/技能药水允许 0..1 张，因此 `FirstLegal` 会跳过，而搜索可能按选中最佳候选估值；尚不能据此评价这两类药水的实际决策质量。
 - 建局、领奖、下一场准备和搜索共同扣除请求时限；耗尽后不启动下一条命令或下一场，
   `result.json` 返回 `Held` 和 `rolloutStopReason=TimeLimit`。限制为协作式停止，不中断正在运行的单个同步结算。
 - 保存后端始终为游戏的 `MemorySaveStore`，不会写回玩家存档。这里没有 Godot 进程或游戏实例目录；

@@ -184,6 +184,9 @@ internal static class Program
                 HistoryCounterChecks.Run(combat!, options.OutputDirectory);
             if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_INFUSED_CORE_CHECKS") == "1")
                 InfusedCoreChecks.Run(combat!, options.OutputDirectory);
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_BLIND_AUDIT") is { Length: > 0 } audit)
+                Step(steps, "Blind information and delayed-benefit audit", () =>
+                    BlindAuditChecks.Run(combat!, options, loop, audit));
             payload["budget"] = DescribeBudget(options);
             payload["root"] = OfflineCombat.DescribeRoot(combat!);
             string diagnostics = options.BlindSamples > 0
