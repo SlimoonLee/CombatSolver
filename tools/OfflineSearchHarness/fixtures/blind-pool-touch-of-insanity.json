@@ -1,0 +1,14 @@
+{
+  "scenarioId": "BLIND-POOL-TOUCH-OF-INSANITY",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 30,
+  "initialPlayerEnergy": 0,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "BLUDGEON", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 }
+  ],
+  "potions": [{ "potionId": "TOUCH_OF_INSANITY" }]
+}

@@ -1,0 +1,13 @@
+{
+  "scenarioId": "BLIND-POOL-ASHWATER",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 20,
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "WOUND", "pile": "Hand", "count": 5 }
+  ],
+  "potions": [{ "potionId": "ASHWATER" }]
+}

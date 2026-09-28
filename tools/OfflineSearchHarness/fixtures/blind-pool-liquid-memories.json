@@ -1,0 +1,15 @@
+{
+  "scenarioId": "BLIND-POOL-LIQUID-MEMORIES",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 20,
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Discard", "count": 2 },
+    { "cardId": "BLUDGEON", "pile": "Discard" }
+  ],
+  "potions": [{ "potionId": "LIQUID_MEMORIES" }]
+}

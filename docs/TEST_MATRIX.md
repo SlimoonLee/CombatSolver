@@ -1,5 +1,16 @@
 # CombatSolver 测试清单
 
+## 机制族扫尾验收（2026-09-29 第三批）
+
+配置与评分范围、最终覆盖矩阵与剩余范围见[机制族扫尾验收](strategy/blind-rng-family-completion-20260929.md)。本批含行为源码改动：新增弹跳药瓶 Mirror（随机目标通道唯一语义缺口）及 Testing 层审计选择策略参数；Mod 已同源码部署。
+
+| 组 | 结果 | 证据 |
+|---|---|---|
+| policy 第三批 14 场景（新生之喜/羽化/发现/富足/类星体/飞溅/预知之滴/往昔之忆/疯狂之触/四生成 Power） | Passed 134 项；异化水受阻（Smart 药水政策在盲路径无可执行路线，记录为集成缺口） | `bundle-of-joy` 等 |
+| audit 第三批 12 场景（上列卡牌 + 弹跳药瓶/狠揍双敌 + 四 Power EndTurn） | 各 Passed 26 项，弹跳药瓶逐样本敌方 HP 互异并原生对账 | `audit-*` |
+| 全量最终清扫 | policy 37 夹具 36 Passed；audit effects 34 夹具全 Passed；delayed/immediate 17/22；采样合同 121 项 | `final-*` |
+| Release 构建与部署、Windows 结构门禁 | Passed：0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=241`；Mod 已部署（占用阻塞解除） | 本轮命令输出 |
+
 ## 随机通道验收（2026-09-29 第二批，含充能球补充）
 
 配置与评分范围见[随机通道验收](strategy/blind-rng-channels-20260929.md)。共同配置同上；证据根为仓库 `.local/blind-policy-20260929/`。本批零行为源码改动。

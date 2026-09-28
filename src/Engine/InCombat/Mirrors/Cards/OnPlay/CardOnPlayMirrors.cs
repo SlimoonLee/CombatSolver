@@ -152,6 +152,7 @@ internal static partial class CardOnPlayMirrors
         registry.Register<Zap>(OrbCardMirrors.ZapOnPlay);
 
         registry.Register<Anointed>(CardSelectionCardMirrors.AnointedOnPlay);
+        registry.Register<BouncingFlask>(CardSelectionCardMirrors.BouncingFlaskOnPlay);
         registry.Register<BeatDown>(CardSelectionCardMirrors.BeatDownOnPlay);
         registry.Register<Catastrophe>(CardSelectionCardMirrors.CatastropheOnPlay);
         registry.Register<Cinder>(CardSelectionCardMirrors.CinderOnPlay);

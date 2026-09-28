@@ -1,0 +1,12 @@
+{
+  "scenarioId": "BLIND-GENERATION-POWER-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 4 }
+  ],
+  "powers": [{ "powerId": "CREATIVE_AI_POWER", "target": "Player" }]
+}

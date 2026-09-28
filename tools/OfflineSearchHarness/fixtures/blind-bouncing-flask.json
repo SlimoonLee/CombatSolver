@@ -1,0 +1,15 @@
+{
+  "scenarioId": "BLIND-BOUNCING-FLASK-AUDIT",
+  "characterId": "SILENT",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [30, 30],
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "BOUNCING_FLASK", "pile": "Hand" },
+    { "cardId": "STRIKE_SILENT", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_SILENT", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_SILENT", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_SILENT", "pile": "Draw", "count": 3 }
+  ]
+}

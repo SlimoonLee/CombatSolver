@@ -47,7 +47,18 @@ internal static class BlindAuditChecks
                 state.Turn, source.Forecast, source.StartTurnNumber).StateText;
         SimulationSnapshot Replay(CombatRootSnapshot source, params PlanAction[] prefix)
             => new CombatBeamSolver(source, names, damage, policy)
-                .ReplayBlindAuditForTesting(prefix);
+                .ReplayBlindAuditForTesting(prefix, AuditChoicePolicy);
+        // The audit's semantic oracle picks the first generated candidate, matching the native
+        // FirstVisibleCardSelector, so generated-choice cards (Discovery family) reconcile.
+        PlanCardChoice? AuditChoicePolicy(TurnStartChoiceRequest request)
+        {
+            if (request.Spec == null) return null;
+            var choices = CardChoiceSupport.BuildChoices(request.Spec, names,
+                policy.Profile.MaxPileChoiceBranchesPerAction, policy.Profile.MaxHandChoiceBranchesPerAction);
+            var choice = choices.FirstOrDefault(item => item.Cards.Count > 0) ?? choices.FirstOrDefault();
+            if (choice == null) return null;
+            return choice with { SourceId = request.SourceId, ContextId = request.ContextId, Timing = request.Timing };
+        }
         PlanAction Play(string id)
         {
             var card = root.ForkSimulator().State.GetPlayerCombatState(player).Hand.Cards

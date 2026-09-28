@@ -1,0 +1,14 @@
+{
+  "scenarioId": "BLIND-POOL-ABUNDANCE-OPPORTUNITY-COST",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 26,
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "ABUNDANCE", "pile": "Hand" },
+    { "cardId": "BLUDGEON", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 3 }
+  ]
+}

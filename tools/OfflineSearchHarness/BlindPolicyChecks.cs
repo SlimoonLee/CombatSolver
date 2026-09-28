@@ -107,7 +107,8 @@ internal static class BlindPolicyChecks
             string poolCardId = poolCardCommand.CardId!;
             string? killerId = poolCardId switch
             {
-                "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM" => "BLUDGEON",
+                "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM"
+                    or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH" or "METAMORPHOSIS" => "BLUDGEON",
                 "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
                 "DISTRACTION" => "STRIKE_SILENT",
                 // THRASH/BALL_LIGHTNING: the pool card itself deals damage, so no certain-kill
@@ -137,7 +138,7 @@ internal static class BlindPolicyChecks
                         action => action.Kind == PlanActionKind.PlayCard && !openingHandIds.Contains(action.CardId))),
                     "post-generation observation plays the revealed card");
         }
-        else if (CostRandomizationFixtureApplies(live))
+        else if (EndTurnRevealedFixtureApplies(live))
         {
             // Slither/Confused style draw-time cost randomization: EndTurn reveals the effect and the
             // next-turn decision must react to the sampled costs.
@@ -146,7 +147,7 @@ internal static class BlindPolicyChecks
                 .Where(value => value.ActionKey == endTurn.FirstActionKey).ToArray();
             Check(endTrajectories.Length > 0
                     && endTrajectories.All(value => value.ObservedActions.Count >= 2),
-                "randomized draw costs lead to a fresh follow-up decision");
+                "end-turn revealed randomness leads to a fresh follow-up decision");
         }
         else
         {
@@ -194,7 +195,9 @@ internal static class BlindPolicyChecks
         string? poolCardId = hand.Select(card => card.Preview.Id.Entry)
             .FirstOrDefault(id => id is "STOKE" or "INFERNAL_BLADE" or "WHITE_NOISE" or "DISTRACTION"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
-                or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING");
+                or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING"
+                or "BUNDLE_OF_JOY" or "METAMORPHOSIS"
+                or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;
@@ -205,13 +208,15 @@ internal static class BlindPolicyChecks
             CardEnchantmentId: card.Preview.Enchantment?.Id.Entry ?? "");
     }
 
-    private static bool CostRandomizationFixtureApplies(CombatState live)
+    private static bool EndTurnRevealedFixtureApplies(CombatState live)
     {
         var player = LocalContext.GetMe(live)!;
         var combat = player.PlayerCombatState!;
         bool slither = combat.DrawPile.Cards.Concat(combat.Hand.Cards)
             .Any(card => card.Enchantment?.Id.Entry == "SLITHER");
         bool confused = player.Creature.Powers.Any(power => power.Id.Entry == "CONFUSED_POWER");
-        return slither || confused;
+        bool generationPower = player.Creature.Powers.Any(power => power.Id.Entry is
+            "CALL_OF_THE_VOID_POWER" or "CREATIVE_AI_POWER" or "HELLO_WORLD_POWER" or "SPECTRUM_SHIFT_POWER");
+        return slither || confused || generationPower;
     }
 }

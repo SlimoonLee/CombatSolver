@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.ValueProps;
 using CombatSolver.Engine.Common;
 using CombatSolver.Engine.InCombat.Extensions;
@@ -12,6 +13,22 @@ namespace CombatSolver.Engine.InCombat.Mirrors.Cards.OnPlay;
 
 internal static class CardSelectionCardMirrors
 {
+    public static void BouncingFlaskOnPlay(BouncingFlask card, CardOnPlayMirrorContext context)
+    {
+        var effects = context.CombatState as ICombatPredictionEffectSink
+            ?? throw new InvalidOperationException("弹跳药瓶效果缺少可写的预测状态。");
+        for (var i = 0; i < card.DynamicVars.Repeat.IntValue; i++)
+        {
+            // Vanilla draws a fresh random hittable enemy per hit, so each hit consumes CombatTargets.
+            Creature? target = context.Rng.CombatTargets.NextItem(context.State.HittableEnemies);
+            if (target is null)
+            {
+                continue;
+            }
+            effects.ApplyPower(typeof(PoisonPower), target, (int)card.DynamicVars.Poison.BaseValue, card.Owner.Creature);
+        }
+    }
+
     public static void AnointedOnPlay(Anointed card, CardOnPlayMirrorContext context)
     {
         int count = context.Simulator.GetMaxHandSize(card.Owner) - context.OwnerState.Hand.Cards.Count;

@@ -133,9 +133,10 @@ internal static class BlindSearchContracts
 
 internal sealed partial class CombatBeamSolver
 {
-    internal SimulationSnapshot ReplayBlindAuditForTesting(IReadOnlyList<PlanAction> actions)
+    internal SimulationSnapshot ReplayBlindAuditForTesting(IReadOnlyList<PlanAction> actions,
+        Func<TurnStartChoiceRequest, PlanCardChoice?>? observedChoicePolicy = null)
     {
         using IDisposable isolation = SimulationNotificationIsolation.Enter();
-        return Replay(actions, allowExecutionCapture: false);
+        return Replay(actions, allowExecutionCapture: false, observedChoicePolicy: observedChoicePolicy);
     }
 }
