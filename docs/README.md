@@ -53,6 +53,7 @@
 | 机制族扫尾：发现族、羽化、新生之喜、剩余药水、生成 Power、弹跳药瓶镜像与覆盖矩阵 | [机制族扫尾验收](strategy/blind-rng-family-completion-20260929.md) |
 | 战斗内遗物 Hook：遗忘之魂/铜钹随机目标与未验收边界 | [遗物 Hook 验收](strategy/blind-rng-relics-20260929.md) |
 | 到手牌家族收尾：大奖/君权自授与激发球卡二连 | [收尾来源验收](strategy/blind-rng-final-sources-20260929.md) |
+| 未知 RNG 全天扩展总交接（含审核要点）：两处行为改动、约 58 来源验收、剩余清单 | [未知 RNG 扩展交接 20260929](strategy/blind-rng-expansion-handoff-20260929.md) |
 | 接手扩展随机牌/药水/机制：代码职责、逐批流程、验收模板、已踩坑与架构缺口 | [未知 RNG 扩展交接](strategy/blind-rng-expansion-handoff-20260928.md) |
 | 完整性能优化正式 PR、路线控件复用、0.38.6 合并验证与对照 | [正式 PR 验收](performance/performance-pr-20260915.md) |
 | 自身弃牌续执行正式接入、搜索等价与整场对照 | [正式续执行与整搜](performance/choice-continuation-search-20260914.md) |
