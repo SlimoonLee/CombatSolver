@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CombatSolver;
+using CombatSolver.Engine.Common;
 using CombatSolver.Engine.InCombat.Simulation;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -86,6 +87,16 @@ internal static class BlindAuditChecks
         if (mode == "effects")
         {
             PotionModel? potion = player.PotionSlots.FirstOrDefault(p => p != null);
+            // Kusarigama strikes a random enemy on every third attack; the audit plays the hand's
+            // three attacks as prefix + audited command so the trigger lands inside the replay.
+            bool hasKusarigama = potion == null && player.Relics.Any(r => r.Id.Entry == "KUSARIGAMA");
+            List<PredictedCard> kusarigamaAttacks = [];
+            if (hasKusarigama)
+            {
+                kusarigamaAttacks = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity)
+                    .Hand.Cards.Where(c => c.Preview.Type == CardType.Attack).Take(3).ToList();
+                Check(kusarigamaAttacks.Count == 3, "kusarigama fixture has three attacks");
+            }
             if (potion == null)
             {
                 // Audited effects either place exactly one pool card in the opening hand, or (for
@@ -98,7 +109,8 @@ internal static class BlindAuditChecks
                      "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED",
                      "JACKPOT", "MANIFEST_AUTHORITY", "MAD_SCIENCE"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
-                command = auditedId == null
+                command = hasKusarigama ? Play(kusarigamaAttacks[0].Preview.Id.Entry)
+                    : auditedId == null
                     ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
                     : Play(auditedId);
             }
@@ -107,7 +119,8 @@ internal static class BlindAuditChecks
                 command = new(PlanActionKind.UsePotion, root.StartTurnNumber,
                     PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
             }
-            Check(command.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
+            Check(hasKusarigama
+                || command.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
                 or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
@@ -144,6 +157,12 @@ internal static class BlindAuditChecks
             PlanAction[] Prefix(CombatRootSnapshot source, PlanAction first)
             {
                 if (channelsThenTurnEnd) return [first, endTurnCommand];
+                if (hasKusarigama)
+                {
+                    // Two other attacks run first; the audited third strike crosses the counter.
+                    var remaining = kusarigamaAttacks.Where(c => c.Preview.Id.Entry != first.CardId).ToList();
+                    return remaining.Select(c => Play(c.Preview.Id.Entry)).Append(first).ToArray();
+                }
                 if (first.Kind == PlanActionKind.PlayCard && first.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST")
                 {
                     var ball = source.ForkSimulator().State.GetPlayerCombatState(player).Hand.Cards

@@ -1,0 +1,17 @@
+{
+  "scenarioId": "BLIND-KUSARIGAMA-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [30, 30],
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "relics": [{ "relicId": "KUSARIGAMA" }],
+  "cards": [
+    { "cardId": "TWIN_STRIKE", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand" },
+    { "cardId": "IRON_WAVE", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}
