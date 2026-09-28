@@ -12,7 +12,7 @@
 | audit 大奖/君权自授/二连/多连/四连/疯狂科学Chaos/横祸/重启 | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
 | 球状闪电回归（前缀重构） | Passed 26 项 | `audit-regress5-bl` |
 
-慷慨捐助（AnyAlly 单局不适用）保持边界；疯狂科学 Chaos 骑手、多连/四连、异化水（ZeroInheritedPotionUse 修复）、横祸/重启（洗牌流）与探寻打击（屏幕排序修复+原生卡牌选择接管，policy 18 + audit 26）均已验收；骚动 audit 已转绿（敌方 HP 教训）；无人测试 308 待补跑。
+慷慨捐助（AnyAlly 单局不适用）保持边界；疯狂科学 Chaos 骑手、多连/四连、异化水（ZeroInheritedPotionUse 修复）、横祸/重启（洗牌流）与探寻打击（屏幕排序修复+原生卡牌选择接管，policy 18 + audit 26）均已验收；骚动 audit 已转绿（敌方 HP 教训）
 
 ## 遗物 Hook 验收（2026-09-29 第四批）
 
