@@ -1,0 +1,13 @@
+{
+  "scenarioId": "BLIND-POOL-BALL-LIGHTNING",
+  "characterId": "DEFECT",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-pool-value-20260929",
+  "initialPlayerEnergy": 3,
+  "initialEnemyCurrentHps": [30, 30],
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "BALL_LIGHTNING", "pile": "Hand" },
+    { "cardId": "STRIKE_DEFECT", "pile": "Hand", "count": 2 }
+  ]
+}

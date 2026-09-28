@@ -110,7 +110,10 @@ internal static class BlindPolicyChecks
                 "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM" => "BLUDGEON",
                 "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
                 "DISTRACTION" => "STRIKE_SILENT",
-                "STOKE" => null,
+                // THRASH/BALL_LIGHTNING: the pool card itself deals damage, so no certain-kill
+                // counter-example is asserted; BALL_LIGHTNING also needs a two-enemy fixture for
+                // its end-of-turn random target, where a one-command kill cannot complete.
+                "STOKE" or "THRASH" or "BALL_LIGHTNING" => null,
                 _ => "STRIKE_IRONCLAD",
             };
             if (killerId != null)
@@ -191,7 +194,7 @@ internal static class BlindPolicyChecks
         string? poolCardId = hand.Select(card => card.Preview.Id.Entry)
             .FirstOrDefault(id => id is "STOKE" or "INFERNAL_BLADE" or "WHITE_NOISE" or "DISTRACTION"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
-                or "ALCHEMIZE" or "CHAOS");
+                or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;

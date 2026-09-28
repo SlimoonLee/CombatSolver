@@ -1,5 +1,7 @@
 # 未知 RNG:随机费用、随机取牌、随机药水与随机球通道验收(2026-09-29 第二批)
 
+> 本批含同日补充:充能球通道(闪电球回合结束被动随机目标,双敌遭遇)见第七节。
+
 ## 批次概览
 
 | 项 | 内容 |
@@ -31,12 +33,15 @@
 
 | 场景 | 检查数 | 重点 |
 |---|---:|---|
-| policy ×7(坚毅/余烬/能量汲取/天选/未掘宝石/混沌/痛殴) | 各 12 | 随机池卡进入完整矩阵、斩杀反例(痛殴除外)、生成后重观察 |
+| policy ×6(坚毅/余烬/能量汲取/天选/未掘宝石/混沌) | 各 12 | 随机池卡进入完整矩阵、斩杀反例、生成后重观察 |
+| policy 痛殴 | 9 | 结构性(池卡自身有伤害,无斩杀反例设计;敌方 20 HP) |
 | policy 炼制药水 | 11 | 斩杀反例(保留选择断言——生成药水是赌注,平局由字典序裁决) |
 | policy ×3(异蛇之油/混沌药水/蛇行/混乱——后者为 EndTurn) | 各 8 | 完整矩阵、隐藏未来独立性、随机化后重新决策 |
 | audit ×13 | 各 26 | 四样本隐藏输入扰动 + 生成互异 + 原生完整 continuation/RNG 对账 |
+| policy 闪电球(双敌) | 9 | 引导闪电球进入完整矩阵、EndTurn 后被动随机目标、重新决策 |
+| audit 闪电球(引导 + EndTurn 两命令) | 26 | 回合结束被动随机目标逐样本不同,两回合原生完整对账 |
 
-合计新检查 **461 项**(policy 123 + audit 338)。既有场景回归:policy attack/skill/acid/stoke/gambler 13/14/9/9/10,audit attack/skill/orobic-acid/stoke 35/35/26/26,与既有记录一致。Mod/宿主 Release 构建 0 警告/0 错误;`REFACTOR_BOUNDARIES_OK search_files=241`。
+合计新检查 **497 项**(policy 133 + audit 364)。既有场景回归:policy attack/skill/acid/stoke/gambler 13/14/9/9/10,audit attack/skill/orobic-acid/stoke 35/35/26/26,与既有记录一致。Mod/宿主 Release 构建 0 警告/0 错误;`REFACTOR_BOUNDARIES_OK search_files=241`。
 
 ## 结果与读法
 
@@ -63,6 +68,18 @@
 ## 口径与预算
 
 外层首动作价值为 `completed_policy_trajectory` 或 `observed_prefix_with_state_heuristic`;样本互异属审计证据。`--budget-ms` 软预算;全部场景在预算内完成,未出现 time_limit 截断。隐藏未来独立性以两个分别新建的决策器验证;搜索前后原生根状态不变。
+
+## 充能球补充:闪电球随机目标
+
+| 项 | 内容 |
+|---|---|
+| 来源 | `BALL_LIGHTNING`(球状闪电:攻击 7 后引导 1 颗闪电球,引导本身确定) |
+| 随机因素 | 闪电球回合结束被动对随机可打击敌人造成 3(+聚焦)伤害;激发 8 伤害同样随机。目标由 `CombatTargets` 流抽取,盲采样已整体替换 |
+| 遭遇 | `CULTISTS_NORMAL`(钙化教徒 + 潮湿教徒,双敌),逐敌注入 HP 30/30,使随机目标真实可辨 |
+| policy | Passed 9 项:池卡进入完整矩阵、EndTurn 后两敌 HP 分布随样本不同、重新决策 |
+| audit | Passed 26 项:引导 + EndTurn 两命令序列,四样本敌方 HP 互异(如 20/27、23/24、17/30),两回合原生完整 continuation/RNG 对账通过 |
+
+审计结果键同时加入敌方 HP,使"随机目标"成为样本互异检查可观测的量;对既有来源敌方 HP 为确定值,无假分歧。冰霜/暗/玻璃/等离子球的被动与激发走同一 `OrbMirrors` 结算面,其随机面仅闪电球涉及 `CombatTargets`;其余(格挡/能量等)为确定结算,不另列验收。
 
 ## 未验证范围与下一步
 
