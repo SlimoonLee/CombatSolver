@@ -1,4 +1,12 @@
 {
+  "INFUSED-CORE-INITIAL-SETUP-20260927": {
+    "status": "Pending",
+    "level": "OfflineProductionHookDiagnostic",
+    "procedure": "OFFLINE_HARNESS_INFUSED_CORE_CHECKS=1；OfflineSearchHarness --character DEFECT --milestone M1；真实生产Hook的首回合空球根诊断。原生短搜夹具initial-toolbox-infused-core.json未运行。",
+    "expected": "首回合参与者生成3个闪电球、4/9数值与3次产球历史；后续回合不重复；根与父子兄弟隔离；原生准备完成后完整状态匹配。",
+    "observed": "修改前actual=0失败，修改后14项离线检查Passed。用户游戏运行中，未启动原生无人测试，也未将离线诊断当作原生完整状态等价。Windows Release构建0警告0错误。",
+    "evidence": "tools/OfflineSearchHarness/InfusedCoreChecks.cs; coverage/unattended/initial-toolbox-infused-core.json; docs/TEST_MATRIX.md"
+  },
   "LOOP-GROUP-DISPLAY-20260921": {
     "status": "Passed",
     "level": "HeadlessNativeUiContract",

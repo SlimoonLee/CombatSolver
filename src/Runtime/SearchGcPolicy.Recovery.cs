@@ -75,8 +75,17 @@ internal static partial class SearchGcPolicy
                 }
                 else if (!IsRecoverableNoGcOutcome(outcome))
                 {
+                    // A classification the probe cannot act on. Region sizing and platform
+                    // support do not change while the process runs, and DefaultGcRequested is
+                    // an explicit decision to stop holding a region, so retrying only repeats
+                    // the same failure. Drop the allowance and let ordinary collection carry
+                    // the rest of this search. The memory-driven classifications opposite this
+                    // branch keep the allowance and are retried at a later drained boundary.
                     signal.UseDefaultGcFallback(systemHeadroomConstrained: false);
                 }
+                // A memory-driven failure needs no action here: the allowance is still set and
+                // the probe stays installed, so the next drained boundary re-evaluates it
+                // against whatever headroom exists then.
                 Entry.Logger.Info($"[CombatSolver/Test] GC_NO_GC_RECOVERY attempt={backoff.Attempts} " +
                     $"outcome={FormatStartOutcome(outcome)} budget={budget} loh_budget={lohBudget} " +
                     $"next_commit_reserve={reservedBytes} physical_load={load} system_limit={systemLimit} " +
@@ -108,12 +117,35 @@ internal static partial class SearchGcPolicy
 
     internal sealed class NoGcRecoveryBackoff
     {
+        // Recovery is a cooldown, not a one-way door.
+        //
+        // Attempts accumulates across fallback segments: RecordRecovery only disarms the
+        // observer, so a search that falls back, recovers, and falls back again keeps
+        // counting. A fixed cap therefore does not bound one segment — it retires the
+        // probe for the whole scope once a handful of segments have come and gone.
+        //
+        // Sampled recovery logs show this is not hypothetical. Across 233 combat journals
+        // the success count by attempt is 64/14/6/5/5/5/3/2/1/1 for attempts 1..10, every
+        // one of them outcome=started. Twenty-two of those successes happened at attempt
+        // four or later, where the old cap had already stopped observing, and one scope
+        // recorded six consecutive successful recoveries while physical load climbed from
+        // 5.56 GB to 10.55 GB and the region budget shrank from 3142 MB to 586 MB. Those
+        // searches kept an allocation ceiling only because the retry still happened.
+        //
+        // The delay saturates instead, so the retry rate stays bounded while the search
+        // keeps every chance to re-establish a region.
+        private const long MaximumObservationDelayMilliseconds = 60_000;
+
+        // 2_000L << 5 == 64_000 already exceeds the saturated delay, so a small exponent is
+        // enough; clamping well below 63 keeps the shift well defined for any attempt count.
+        private const int MaximumObservationExponent = 5;
+
         private long _nextObservation;
         private long _lastGen2Index;
         private bool _armed;
         public int Attempts { get; private set; }
 
-        public bool ShouldObserve(long now) => Attempts < 3 && now >= _nextObservation;
+        public bool ShouldObserve(long now) => now >= _nextObservation;
 
         public void ArmFallback(long now, long gen2Index)
         {
@@ -132,7 +164,7 @@ internal static partial class SearchGcPolicy
             // evidence instead of allocating under ordinary GC just to wait for another one.
             _lastGen2Index = Math.Max(_lastGen2Index, completedGen2Index - 1);
             // Only the first recovery can be immediate. Later losses retain the previous
-            // attempt's backoff and the same per-scope hard cap.
+            // attempt's cooldown and cumulative attempt count.
             _nextObservation = Math.Max(_nextObservation, now);
         }
 
@@ -154,9 +186,25 @@ internal static partial class SearchGcPolicy
         {
             Attempts++;
             _lastGen2Index = gen2Index;
-            _nextObservation = now + (2_000L << Attempts);
+            // Attempts is no longer capped, so the shift count must be clamped before it can
+            // wrap, and the deadline must saturate instead of overflowing past long.MaxValue.
+            int shift = Math.Min(Attempts, MaximumObservationExponent);
+            long delay = Math.Min(MaximumObservationDelayMilliseconds, 2_000L << shift);
+            _nextObservation = now > long.MaxValue - delay ? long.MaxValue : now + delay;
         }
 
         public void RecordRecovery() => _armed = false;
     }
+
+    /// <summary>
+    /// Exposes the recoverability classification to the policy checks without widening the
+    /// enum's visibility, so the split between memory-driven and structural failures can be
+    /// asserted directly.
+    /// </summary>
+    internal static bool IsRecoverableOutcomeForTesting(string outcomeName)
+        => Enum.TryParse(outcomeName, ignoreCase: false, out NoGcRegionStartOutcome parsed)
+            && IsRecoverableNoGcOutcome(parsed);
+
+    internal static bool IsKnownOutcomeNameForTesting(string outcomeName)
+        => Enum.TryParse(outcomeName, ignoreCase: false, out NoGcRegionStartOutcome _);
 }

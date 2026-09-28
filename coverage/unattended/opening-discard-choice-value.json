@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "OPENING-DISCARD-CHOICE-VALUE",
+  "characterId": "SILENT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "OPENING-DISCARD-CHOICE-VALUE",
+  "enemyCurrentHp": 50,
+  "enableNoGcRegionForTest": false,
+  "headlessFastModeForTest": "Instant",
+  "timeoutSeconds": 120
+}

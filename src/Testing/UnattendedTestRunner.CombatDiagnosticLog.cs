@@ -38,7 +38,8 @@ internal sealed partial class UnattendedTestRunner
         SearchReplayEvidence evidence = new(node);
         ActionRelicTriggerRecorder recorder = new();
         SimulationSnapshot replay = (SimulationSnapshot)InvokeForcedTerminalMethod(driver, "Replay",
-            [new PlanAction[] { action }, null, root.StartTurnNumber, 0, recorder, null, evidence])!;
+            [new PlanAction[] { action }, null, root.StartTurnNumber, 0, recorder, null, evidence,
+                null, null, null, null, null, true, true, null])!;
         try
         {
             if (selected.StateKey != replay.StateKey || evidence.FirstScalarDifference != null)

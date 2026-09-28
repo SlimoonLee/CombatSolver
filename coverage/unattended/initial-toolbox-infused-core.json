@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "runId": "initial-toolbox-infused-core",
+  "scenarioId": "INITIAL-TOOLBOX-INFUSED-CORE",
+  "characterId": "DEFECT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "INITIAL-TOOLBOX-INFUSED-CORE",
+  "relics": [
+    {
+      "relicId": "INFUSED_CORE"
+    },
+    {
+      "relicId": "TOOLBOX",
+      "addWithoutObtainedEffects": true
+    }
+  ],
+  "fixedSearchBudget": true,
+  "searchBudgetOverrideMilliseconds": 1500,
+  "holdAfterInitialSearch": true,
+  "expectedInitialSetupChoiceCountAtLeast": 1,
+  "expectedInitialSetupChoiceSourceId": "TOOLBOX",
+  "expectedNativeChoiceSurface": "ChooseCard",
+  "expectedNativeChoiceVisibleAtLeast": 1,
+  "verifyIncrementalSearch": true,
+  "stopAfterInitialSetupAssertion": true,
+  "timeoutSeconds": 120
+}

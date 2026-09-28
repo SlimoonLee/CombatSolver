@@ -19,6 +19,7 @@ description: 在战斗语义已证明正确后，审计或修改 CombatSolver �
 - `PredictionCoverage` 可以在原四字段去重后物化gap，但仍须逐项执行原补偿判定，并保持SourceId/Method稳定排序及同键先遇到者；不能把本地去重扩展成跨历史/分支回调缓存。
 - `BeamRetentionPolicy` 决定中间候选保留；
 - `FinalPlanOrdering` 决定终局路线；
+- 最终续用戳由 `Terminal` 冻结选中路线的动作索引／回合边界，在既有完整标注回放的动作作用域退出后捕获。保持 EndTurn／强制结束、非死非胜且无边界、有该回合后续动作的原资格，准备根只回放一次已选 setup。只保存纯值，不 Fork 带遗物记录器的模拟器；结尾核对全部边界与最终状态。旧独立前缀回放只作测试 oracle；减少的物理 replay／setup transition 计数须如实报告，不伪加计数，不把长路线收尾收益外推为整搜提速。
 - `SearchRunContext` 拥有单次运行指标、转置和缓存；
 - 就绪负缓存实验已因正式对照两对更慢而撤回，生产不含该缓存。它只省去同父状态未变化时的重复选择数组扫描；coordinator派发/接收时失效，不减少父槽轮询或邮箱次数。诊断命中时重扫可验证失效覆盖，不能把数组扫描减少率当作整搜提速。
 - `CombatBeamSolver.Transpositions` 保持原六维支配关系与接纳顺序；单标签内联，多标签才分配List，重新缩为单标签时释放容器。只改变存储形态，不能清空仍有消费者的判重表来追求GC指标。
@@ -94,6 +95,8 @@ description: 在战斗语义已证明正确后，审计或修改 CombatSolver �
 
 - `BeamRetentionPolicy.RoutingChoiceScratch` 只复用空字典桶；每次 `RankBest` 的 `RoutingChoiceNodes` 独占候选列表和五项代表，按原比较规则聚合，归还时清空引用，不跨调用缓存组。组填满后用原 `Max/Min` 冻结最高 Beam 分、最高父分和最低父排名；只在本次 routing block 中使用，全部消费早于 `AssignRetentionRanks`，下一次调用重新建立。不得把该组统计扩展成单节点父链或跨调用排名缓存；新统计必须证明有效期并对比包括 deferred-round 诊断在内的相关非时序指标。
 - `SearchRunContext` 是单次运行可变指标、转置和缓存的所有者；不要把这些字段退回 solver 入口或静态全局。
+- 请求工作归因复用 `SearchRequestWorkTotals` 原总账本：经续搜调度器的 solver 用 `ContinuationPurpose` 标记，主搜、宽度精炼及直接审计／侦察成员用 `DirectSearchPurpose` 标记，仍未标记的直接成员记 `UnattributedDirect`，协调器开销另列。各分项之和须与原展开、转移和选择总计一致；阶段名不能替代候选丢失证据，旧超时包没有进度快照时保持未归因。
+- 混沌药生成链成员只在根药水确有生成源、原路线尚有可改善战损且请求账本有余量时运行。候选来自已选路线早期前缀及合法进攻跟进，生成药的免费身份从分支状态读取；最多两条前缀，每条共享请求节点／时间，完整结果由既有用药政策取优。强制用药按原政策验证，不以包 ID 或预定卡牌顺序提名。
 - 无完整胜利追加搜索位于请求级、主搜索与药水审计之后，消耗请求剩余时间。每轮分配/转移采样从该轮开始计；采用或应用结果直接交还调用者。饱和判断比较上一轮全部搜索维度，预设节点调整与动态恢复倍数分别记录。
 - 并行 worker 只能拥有 lane-local 模拟、缓存、节流和原始候选；transposition、dominance、fallback、预算与最终接收顺序仍由 coordinator 独占。固定 lane 应在一次 `Solve` 内复用，禁止回到每父节点 `Task.Run` / 新建 solver。
 - 外层最多预约 `2×DOP` 父节点，已准入作业内同时模拟最多 DOP；自然 singleton 也使用同一调度器。准备动作表后，每父节点独立 Fork gate 串行生成 seed，lane 在 gate 外独占模拟。动态选择预算及 occurrence collector 属于一条完整动作链，不并发消费同一个预算。药水/目标是独立作业，初始动作/药水均已派发后可独立计算 EndTurn，仍使用同父 Fork gate，结果与基线值归私有批次；全部卡牌/选择/药水及 EndTurn 都完成后才按原边界移交结果并发布父节点 stand-pat 基线。coordinator 归并 worker 指标后才能复用 lane，按动作/药水原序聚合，只提交完成父节点的连续前缀。内部不能新准入父节点或做 GC checkpoint；父节点高水位预约覆盖所有在途结果，数量界不当作硬字节界。冷启动按每父节点64 MiB再乘1.5预约；完整观测后保留整次搜索最大实测父分配的1.5倍，并在每批另加96 MiB突发余量。不得在新深度重置高水位、删除整批突发余量，或把预测说成未知分配的硬保证。纯串行后备仍按原有单父节点冷下限/实测高水位预约，不叠加并行窗口的整批余量。异常停止派发、排空全部 lane 后才释放 probe/batch/root；高分支场景必须同时看峰值图和分配。
@@ -166,7 +169,7 @@ description: 在战斗语义已证明正确后，审计或修改 CombatSolver �
 
 - 无色药水与CosmicConcoction可以复用已有根无色候选池，仍使用GetDistinct/TakeRandom的原RNG顺序、独立生成卡及升级。无模拟器预览保持原筛选；不将结果牌或RNG缓存到根，也不改变选一张与全部入手两种返回形态。
 
-- NoGC 回退恢复只在 coordinator 已排空的提交边界执行 Runtime 探针。只可复用退出后检查点已确认完成、尚未用于失败预留的 Gen2 证据；否则等待新的已完成 Gen2。首次有完成证据可立即尝试，后续保留退避、实际物理余量和每 scope 三次上限，不能清零重试次数。保留恢复后的区域上限，不能立刻扩回原大预留。全堆 FragmentedBytes 不构成 NoGC SOH 必能复用的容量证明。探针不得强制收集或等待 deferred 链；退出请求、scope 代次、取消和 Dispose 必须阻止旧探针复活。用户关闭、平台/尺寸不支持及主动不可分割回退保持普通 GC。合同须穿过真实 CLR 的退出/恢复，而非只测试状态机。
+- NoGC 回退恢复只在 coordinator 已排空的提交边界执行 Runtime 探针。只可复用退出后检查点已确认完成、尚未用于失败预留的 Gen2 证据；否则等待新的已完成 Gen2。首次有完成证据可立即尝试，后续保留实际物理余量及指数退避，冷却上限为 60 秒；尝试次数跨回退段累计，成功恢复后继续保留计数，以冷却约束重试频率。恢复资格只属于 InsufficientMemory、SystemHeadroomInsufficient、SkippedAfterUnexpectedLoss。保留恢复后的区域上限，不能立刻扩回原大预留。全堆 FragmentedBytes 不构成 NoGC SOH 必能复用的容量证明。探针不得强制收集或等待 deferred 链；退出请求、scope 代次、取消和 Dispose 必须阻止旧探针复活。用户关闭、平台/尺寸不支持及主动不可分割回退保持普通 GC。合同须穿过真实 CLR 的退出/恢复和 UseDefaultGcAndContinue 主动退出入口，而非只测试状态机或分类函数。
 
 - 按消费者省略战略上下文字段时，核对外部登记器可读取的既有字段；登记表非空保留原上下文，不因第三方未声明新需求标志就返回0。原版与第三方字段消费者分别用最小合同覆盖。
 

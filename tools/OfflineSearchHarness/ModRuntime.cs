@@ -55,6 +55,8 @@ internal static class ModRuntime
         ApplyUnattendedOverrides(options);
         string cardPileFreeze = FreezeModCardPiles();
         int applied = ApplySearchPatches();
+        // 离线宿主在 M0.2 已完成 ModelDb.Init，没有 RitsuLib 生命周期事件；注册表此时已定型。
+        ModelDbGetIdCachePatch.MarkModelRegistryInitialized();
 
         SolverSettingsSnapshot snapshot = SolverSettings.Capture();
         return $"patches_applied={applied}/{SearchPatchTypes.Length} "

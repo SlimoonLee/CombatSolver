@@ -104,7 +104,22 @@ internal sealed partial class CombatBeamSolver
                         OptionalPotionCount: optionalPotionCount,
                         OptionalPotionStrategicCost: optionalPotionStrategicCost,
                         OptionalAmbergrisCount: optionalAmbergrisCount,
-                        EffectivePotionPolicy: effectivePotionPolicy);
+                        EffectivePotionPolicy: effectivePotionPolicy,
+                        Quality: new RouteQuality(
+                            completeVictory,
+                            !candidate.Snapshot.PlayerDead && features.ProjectedPlayerHp > 0,
+                            candidate.Snapshot.ProjectedDeathSaveUseCount,
+                            features.OutstandingStolenResource,
+                            strategicHpDeficit,
+                            candidate.Snapshot.StrategyGoalHpCredit,
+                            candidate.Snapshot.StrategyGoalCount,
+                            completeVictory ? candidate.Snapshot.CombatEndedTurn : null,
+                            hpDeficit,
+                            candidate.Node.PotionStrategicCost,
+                            potionCount,
+                            features.EnemyHp,
+                            features.Score,
+                            theftPolicy));
                 })
                 .ToList();
             if (emitDiagnostics && detailedDiagnostics)
@@ -245,23 +260,15 @@ internal sealed partial class CombatBeamSolver
                 })
                 .ToList();
             var selected = policyEligibleCandidates
-                .OrderByDescending(candidate => candidate.CompleteVictory)
-                // A live incomplete fallback is always preferable to a dead fallback. For
-                // complete victories this key is uniformly zero and cannot weaken the
-                // requested loss-then-duration ordering.
-                .ThenBy(candidate => !candidate.CompleteVictory
-                    && (candidate.Snapshot.PlayerDead
-                        || candidate.Snapshot.ProjectedPlayerHp <= 0)
-                        ? 1
-                        : 0)
-                .ThenBy(candidate => candidate.Snapshot.ProjectedDeathSaveUseCount)
+                .OrderByDescending(candidate => candidate.Quality.Won)
+                .ThenBy(candidate => !candidate.Quality.Won && !candidate.Quality.Survives ? 1 : 0)
+                .ThenBy(candidate => candidate.Quality.DeathSaveUseCount)
                 .ThenBy(candidate => theftPolicy == SolverTheftPolicy.PreserveResources
-                    ? candidate.Features.OutstandingStolenResource : 0)
-                // Compare HP after the requested recovery objective.
-                .ThenBy(candidate => candidate.StrategicHpDeficit)
-                .ThenByDescending(candidate => candidate.Snapshot.StrategyGoalHpCredit)
-                .ThenByDescending(candidate => candidate.Snapshot.StrategyGoalCount)
-                .ThenBy(candidate => candidate.CombatEndedTurn ?? int.MaxValue)
+                    ? candidate.Quality.OutstandingStolenResource : 0)
+                .ThenBy(candidate => candidate.Quality.StrategicHpDeficit)
+                .ThenByDescending(candidate => candidate.Quality.GrowthHpCredit)
+                .ThenByDescending(candidate => candidate.Quality.GrowthRewardCount)
+                .ThenBy(candidate => candidate.Quality.CombatEndedTurn ?? int.MaxValue)
                 .ThenBy(candidate => candidate.PolicyHpDeficit)
                 .ThenBy(candidate => candidate.HealthResourceCost)
                 .ThenByDescending(candidate => candidate.Features.LongTermResourceValue)
@@ -364,38 +371,31 @@ internal sealed partial class CombatBeamSolver
             leftWon, leftSnapshot.OutstandingStolenResource, rightWon, rightSnapshot.OutstandingStolenResource);
         if (comparison != 0)
             return comparison;
-        comparison = (ActEndingBossPolicy.StrategicHpDeficit(
+        RouteQuality leftQuality = RouteQuality.Primary(leftWon,
+            ActEndingBossPolicy.StrategicHpDeficit(
                 leftSnapshot.CumulativePlayerHpLost,
                 Math.Max(0, initialPlayerMaxHp - leftSnapshot.PlayerMaxHp),
                 leftSnapshot.RecoveredPlayerHp
                     + ActEndingBossPolicy.RankedPostCombatRelicHeal(
-                        postCombatRelicHeal,
-                        leftWon,
-                        leftSnapshot.PlayerHp,
-                        leftSnapshot.PlayerMaxHp),
-                bossHpRelief,
-                leftSnapshot.DeathSaveHpRestored) - leftSnapshot.StrategicHpCredit)
-            .CompareTo(ActEndingBossPolicy.StrategicHpDeficit(
+                        postCombatRelicHeal, leftWon, leftSnapshot.PlayerHp, leftSnapshot.PlayerMaxHp),
+                bossHpRelief, leftSnapshot.DeathSaveHpRestored) - leftSnapshot.StrategicHpCredit,
+            leftWon ? leftSnapshot.CombatEndedTurn : null,
+            leftSnapshot.StrategyGoalHpCredit,
+            leftSnapshot.StrategyGoalCount,
+            leftSnapshot.ProjectedDeathSaveUseCount);
+        RouteQuality rightQuality = RouteQuality.Primary(rightWon,
+            ActEndingBossPolicy.StrategicHpDeficit(
                 rightSnapshot.CumulativePlayerHpLost,
                 Math.Max(0, initialPlayerMaxHp - rightSnapshot.PlayerMaxHp),
                 rightSnapshot.RecoveredPlayerHp
                     + ActEndingBossPolicy.RankedPostCombatRelicHeal(
-                        postCombatRelicHeal,
-                        rightWon,
-                        rightSnapshot.PlayerHp,
-                        rightSnapshot.PlayerMaxHp),
-                bossHpRelief,
-                rightSnapshot.DeathSaveHpRestored) - rightSnapshot.StrategicHpCredit);
-        if (comparison != 0)
-            return comparison;
-        comparison = rightSnapshot.StrategyGoalHpCredit.CompareTo(leftSnapshot.StrategyGoalHpCredit);
-        if (comparison != 0)
-            return comparison;
-        comparison = rightSnapshot.StrategyGoalCount.CompareTo(leftSnapshot.StrategyGoalCount);
-        if (comparison != 0)
-            return comparison;
-        comparison = (leftWon ? leftSnapshot.CombatEndedTurn ?? int.MaxValue : int.MaxValue)
-            .CompareTo(rightWon ? rightSnapshot.CombatEndedTurn ?? int.MaxValue : int.MaxValue);
+                        postCombatRelicHeal, rightWon, rightSnapshot.PlayerHp, rightSnapshot.PlayerMaxHp),
+                bossHpRelief, rightSnapshot.DeathSaveHpRestored) - rightSnapshot.StrategicHpCredit,
+            rightWon ? rightSnapshot.CombatEndedTurn : null,
+            rightSnapshot.StrategyGoalHpCredit,
+            rightSnapshot.StrategyGoalCount,
+            rightSnapshot.ProjectedDeathSaveUseCount);
+        comparison = RouteQualityPolicy.Compare(leftQuality, rightQuality, RouteQualityProjection.Primary);
         if (comparison != 0)
             return comparison;
         if (theftPolicy == SolverTheftPolicy.PreserveResources)

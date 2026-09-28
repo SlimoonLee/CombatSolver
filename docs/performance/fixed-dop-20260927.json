@@ -1,0 +1,357 @@
+{
+  "baselineCommit": "72e0f799",
+  "date": "2026-09-27",
+  "searchDegreeOfParallelism": 1,
+  "runtime": ".NET 9.0.20 Windows",
+  "nativeValidation": "Blocked before startup by existing player game; owned instance cleanup succeeded",
+  "rejectedSnapshotCopy": {
+    "roots": 2,
+    "samples": 8,
+    "excludedTimingMemoryFields": [
+      "CapturedAtElapsedMilliseconds",
+      "ElapsedMilliseconds",
+      "GcLifecycle",
+      "ManagedFragmentedBytes",
+      "ManagedHeapBytes",
+      "ManagedLiveBytes",
+      "MaxGcPauseMilliseconds",
+      "PeakManagedHeapBytes",
+      "PrivateMemoryBytes",
+      "TotalElapsedMilliseconds",
+      "TotalGcPauseMilliseconds",
+      "TotalGen0Collections",
+      "TotalGen1Collections",
+      "TotalGen2Collections",
+      "TotalWorkerAllocatedBytes",
+      "WorkerAllocatedBytes",
+      "WorkingSetBytes"
+    ],
+    "results": [
+      {
+        "scenario": "discard",
+        "equalCompleteRecordedFields": true,
+        "measurements": [
+          {
+            "sample": "A1",
+            "wallSeconds": 5.7740044,
+            "searchMilliseconds": 5607.8557,
+            "allocatedBytes": 1114687480,
+            "gcPauseMilliseconds": 716.093,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "B1",
+            "wallSeconds": 7.5105269,
+            "searchMilliseconds": 7359.5977,
+            "allocatedBytes": 1113010144,
+            "gcPauseMilliseconds": 956.619,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "B2",
+            "wallSeconds": 7.3964157,
+            "searchMilliseconds": 7253.7629,
+            "allocatedBytes": 1113044448,
+            "gcPauseMilliseconds": 972.037,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "A2",
+            "wallSeconds": 6.2154486,
+            "searchMilliseconds": 6064.063,
+            "allocatedBytes": 1120580560,
+            "gcPauseMilliseconds": 728.786,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          }
+        ],
+        "searchChangePercent": 25.201014294247948,
+        "allocationChangePercent": -0.4121853771058226
+      },
+      {
+        "scenario": "defect",
+        "equalCompleteRecordedFields": true,
+        "measurements": [
+          {
+            "sample": "A1",
+            "wallSeconds": 5.0476977,
+            "searchMilliseconds": 4888.437,
+            "allocatedBytes": 396673968,
+            "gcPauseMilliseconds": 222.976,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "B1",
+            "wallSeconds": 4.7753035,
+            "searchMilliseconds": 4618.0732,
+            "allocatedBytes": 396105120,
+            "gcPauseMilliseconds": 258.34,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "B2",
+            "wallSeconds": 4.5288793,
+            "searchMilliseconds": 4395.9332,
+            "allocatedBytes": 393601264,
+            "gcPauseMilliseconds": 257.218,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "A2",
+            "wallSeconds": 4.4942963,
+            "searchMilliseconds": 4364.3928,
+            "allocatedBytes": 394599744,
+            "gcPauseMilliseconds": 231.564,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          }
+        ],
+        "searchChangePercent": -2.5810849779166922,
+        "allocationChangePercent": -0.1980765917318883
+      }
+    ]
+  },
+  "normalSearch": {
+    "roots": 2,
+    "samples": 8,
+    "excludedTimingMemoryFields": [
+      "CapturedAtElapsedMilliseconds",
+      "ElapsedMilliseconds",
+      "GcLifecycle",
+      "ManagedFragmentedBytes",
+      "ManagedHeapBytes",
+      "ManagedLiveBytes",
+      "MaxGcPauseMilliseconds",
+      "PeakManagedHeapBytes",
+      "PrivateMemoryBytes",
+      "TotalElapsedMilliseconds",
+      "TotalGcPauseMilliseconds",
+      "TotalGen0Collections",
+      "TotalGen1Collections",
+      "TotalGen2Collections",
+      "TotalWorkerAllocatedBytes",
+      "WorkerAllocatedBytes",
+      "WorkingSetBytes"
+    ],
+    "results": [
+      {
+        "scenario": "discard",
+        "equalCompleteRecordedFields": true,
+        "measurements": [
+          {
+            "sample": "A1",
+            "wallSeconds": 6.0562773,
+            "searchMilliseconds": 5932.5927,
+            "allocatedBytes": 1141935504,
+            "gcPauseMilliseconds": 574.004,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "B1",
+            "wallSeconds": 5.7077044,
+            "searchMilliseconds": 5583.1638,
+            "allocatedBytes": 1135442072,
+            "gcPauseMilliseconds": 604.272,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "B2",
+            "wallSeconds": 6.0597094,
+            "searchMilliseconds": 5936.8952,
+            "allocatedBytes": 1140139600,
+            "gcPauseMilliseconds": 621.411,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          },
+          {
+            "sample": "A2",
+            "wallSeconds": 6.1654048,
+            "searchMilliseconds": 6015.129,
+            "allocatedBytes": 1142121848,
+            "gcPauseMilliseconds": 588.063,
+            "expanded": 1564,
+            "transitions": 34802,
+            "hpLost": 0
+          }
+        ],
+        "searchChangePercent": -3.5794497958552163,
+        "allocationChangePercent": -0.37107999904548716
+      },
+      {
+        "scenario": "defect",
+        "equalCompleteRecordedFields": true,
+        "measurements": [
+          {
+            "sample": "A1",
+            "wallSeconds": 3.2927736,
+            "searchMilliseconds": 3168.4904,
+            "allocatedBytes": 396668280,
+            "gcPauseMilliseconds": 168.162,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "B1",
+            "wallSeconds": 3.2161757,
+            "searchMilliseconds": 3093.743,
+            "allocatedBytes": 395494536,
+            "gcPauseMilliseconds": 157.731,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "B2",
+            "wallSeconds": 3.3757326,
+            "searchMilliseconds": 3241.6461,
+            "allocatedBytes": 395516040,
+            "gcPauseMilliseconds": 164.258,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          },
+          {
+            "sample": "A2",
+            "wallSeconds": 3.3351713,
+            "searchMilliseconds": 3216.7501,
+            "allocatedBytes": 396735032,
+            "gcPauseMilliseconds": 161.668,
+            "expanded": 2000,
+            "transitions": 7783,
+            "hpLost": 10
+          }
+        ],
+        "searchChangePercent": -0.780728619384019,
+        "allocationChangePercent": -0.30157877636890484
+      }
+    ],
+    "expectedPhysicalWorkDifference": {
+      "discard": {
+        "baselineReplays": 4,
+        "candidateReplays": 2
+      },
+      "defect": {
+        "baselineReplays": 8,
+        "candidateReplays": 2
+      }
+    }
+  },
+  "longFixedPrefix": {
+    "roots": 3,
+    "processOrder": [
+      "A1",
+      "B1",
+      "B2",
+      "A2"
+    ],
+    "measuredSamplesPerRootPerArm": 6,
+    "caveat": "Constructed terminal fixed-prefix workload, not ordinary search or native-game validation.",
+    "results": [
+      {
+        "turns": 4,
+        "fullRecordedResultEqual": true,
+        "baselineMilliseconds": [
+          2.2824,
+          2.0541,
+          1.9041,
+          2.5248,
+          2.0856,
+          2.145
+        ],
+        "candidateMilliseconds": [
+          1.7567,
+          1.4875,
+          1.3457,
+          1.6756,
+          1.3919,
+          1.287
+        ],
+        "baselineMeanMilliseconds": 2.166,
+        "candidateMeanMilliseconds": 1.4907333333333332,
+        "speedup": 1.452976163856715,
+        "baselineMedianBytes": 555424.0,
+        "candidateMedianBytes": 382984.0,
+        "allocationReductionPercent": 31.046551823471802
+      },
+      {
+        "turns": 8,
+        "fullRecordedResultEqual": true,
+        "baselineMilliseconds": [
+          5.9048,
+          5.5266,
+          5.8596,
+          5.2837,
+          5.3797,
+          5.4833
+        ],
+        "candidateMilliseconds": [
+          2.8129,
+          2.5661,
+          2.705,
+          2.901,
+          2.5558,
+          2.4745
+        ],
+        "baselineMeanMilliseconds": 5.57295,
+        "candidateMeanMilliseconds": 2.669216666666667,
+        "speedup": 2.0878597341292386,
+        "baselineMedianBytes": 1459744.0,
+        "candidateMedianBytes": 771744.0,
+        "allocationReductionPercent": 47.13155183374619
+      },
+      {
+        "turns": 17,
+        "fullRecordedResultEqual": true,
+        "baselineMilliseconds": [
+          17.0322,
+          17.0226,
+          17.2817,
+          19.0673,
+          19.0183,
+          18.8905
+        ],
+        "candidateMilliseconds": [
+          5.4064,
+          5.5189,
+          10.0922,
+          5.7901,
+          5.4285,
+          9.1555
+        ],
+        "baselineMeanMilliseconds": 18.0521,
+        "candidateMeanMilliseconds": 6.8986,
+        "speedup": 2.61677731713681,
+        "baselineMedianBytes": 4680312.0,
+        "candidateMedianBytes": 1637176.0,
+        "allocationReductionPercent": 65.01993884168407
+      }
+    ]
+  },
+  "limitations": [
+    "Offline harness does not replace native correctness tests",
+    "Existing desktop game may affect wall-clock measurements",
+    "Ordinary search intervals overlap; stable overall speedup not established",
+    "Long-prefix cost comparison has zero expanded search nodes",
+    "Superseded long-prefix input accumulated default cards; only long-prefix-final used"
+  ]
+}

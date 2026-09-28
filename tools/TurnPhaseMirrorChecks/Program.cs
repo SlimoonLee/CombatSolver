@@ -51,6 +51,8 @@ if (args.Contains("--seal"))
     AfterSideTurnEndLateMirrors.Seal();
     Throws<InvalidOperationException>(() => AfterSideTurnEndLateMirrors.Register<TestRelic>((_, _) => { }),
         "Root seal allowed registration before first dispatch.");
+    Throws<InvalidOperationException>(() => AfterSideTurnEndLateMirrors.Register(typeof(TestRelic), (_, _) => { }), "Runtime handler bypassed seal.");
+    Throws<InvalidOperationException>(() => AfterSideTurnEndLateMirrors.RegisterIgnored(typeof(TestRelic)), "Runtime ignore bypassed seal.");
     Console.WriteLine($"TURN_PHASE_SEAL_OK checks={checks}");
     return;
 }
@@ -67,11 +69,15 @@ AfterSideTurnEndLateMirrors.Register<TestModifier>((_, context) =>
     context.Simulator.Events.Add($"modifier:{context.Side}:{context.Participants.Count}"));
 AfterSideTurnEndLateMirrors.Register<TestCard>((card, context) => context.Simulator.Events.Add(card.Label));
 Throws<ArgumentException>(() => AfterSideTurnEndLateMirrors.Register<TestRelic>((_, _) => { }), "Duplicate accepted.");
+Throws<ArgumentException>(() => AfterSideTurnEndLateMirrors.RegisterIgnored(typeof(AbstractRelic)), "Abstract ignore accepted.");
+Throws<ArgumentException>(() => AfterSideTurnEndLateMirrors.RegisterIgnored(typeof(UnrelatedLateReceiver)), "Unrelated runtime type accepted.");
+AfterSideTurnEndLateMirrors.Register(typeof(RuntimeLateRelic), (model, context) => context.Simulator.Events.Add(((RuntimeLateRelic)model).Label));
+AfterSideTurnEndLateMirrors.RegisterIgnored(typeof(IgnoredLateRelic));
 
 var descriptor = ((IMethodMirrorRegistryDescriptorProvider)typeof(AfterSideTurnEndLateMirrors)
     .GetField("Registry", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!).DescribeMirrorSupport();
 Check(descriptor.BaseMethod.Name == nameof(AbstractModel.AfterSideTurnEndLate), "Wrong method metadata.");
-Check(descriptor.Registrations.Count == 4 && descriptor.Registrations.All(r => r.Kind == MethodMirrorRegistrationKind.Handled),
+Check(descriptor.Registrations.Count == 6 && descriptor.Registrations.Count(r => r.Kind == MethodMirrorRegistrationKind.Handled) == 5,
     "Coverage descriptor lost a handler.");
 
 CombatPredictionSimulator simulator = new() { Listeners = [new TestRelic("first"), new TestModifier(), new TestRelic("last")] };
@@ -81,6 +87,8 @@ Throws<InvalidOperationException>(() => AfterSideTurnEndLateMirrors.Register<Tes
 
 simulator = new() { Listeners = [new AbstractModel()] };
 Check(Run(simulator) && simulator.Risks == 0, "Base no-op recorded risk.");
+simulator = new() { Listeners = [new RuntimeLateRelic("runtime"), new IgnoredLateRelic()] };
+Check(Run(simulator) && simulator.Events.SequenceEqual(["runtime"]), "Runtime late registration dispatch changed.");
 simulator = new() { Listeners = [new UnknownRelic(), new TestRelic("must not run")] };
 Throws<NotSupportedException>(() => Run(simulator), "Unknown override silently skipped.");
 Check(simulator.Risks == 1 && simulator.Events.Count == 0, "Unknown override continued dispatch.");
@@ -129,6 +137,12 @@ class TestRelic(string label = "base", Action<AfterSideTurnEndLateMirrorContext>
         => throw new Exception("Native hook invoked.");
 }
 class DerivedRelic : TestRelic;
+class RuntimeLateRelic(string label = "runtime") : TestRelic(label);
+class IgnoredLateRelic : TestRelic;
+class UnrelatedLateReceiver
+{
+    public Task AfterSideTurnEndLate(PlayerChoiceContext choice, CombatSide side, IEnumerable<Creature> participants) => Task.CompletedTask;
+}
 abstract class AbstractRelic : TestRelic;
 class UnknownRelic : TestRelic;
 class TestModifier : ModifierModel

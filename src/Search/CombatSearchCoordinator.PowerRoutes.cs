@@ -7,15 +7,18 @@ internal static partial class CombatSearchCoordinator
     private const int MinimumPowerRouteMilliseconds = 10_000;
 
     private static SolverResult RunOpeningNightmarePortfolio(
-        CombatRootSnapshot root,
-        SolverDisplayNames displayNames,
-        BattleDamageSnapshot battleDamage,
-        SearchPolicySnapshot policy,
-        CancellationToken cancellationToken,
-        Action<SolverProgress>? progressCallback,
-        SolverSearchProfile profile,
+        SearchPassContext context,
         SolverResult baseline)
     {
+        CombatRootSnapshot root = context.Root;
+        SolverDisplayNames displayNames = context.DisplayNames;
+        BattleDamageSnapshot battleDamage = context.BattleDamage;
+        SearchPolicySnapshot policy = context.Policy;
+        CancellationToken cancellationToken = context.CancellationToken;
+        Action<SolverProgress>? progressCallback = context.ProgressCallback;
+        SolverSearchProfile profile = context.Profile;
+        if (policy.IncludeTurnSetup)
+            return baseline;
         CombatBeamSolver builder = new(root, displayNames, battleDamage, policy,
             cancellationToken, progressCallback, profile,
             potionPolicyOverride: SolverPotionPolicy.RequireAtLeastOne,
@@ -30,6 +33,7 @@ internal static partial class CombatSearchCoordinator
         }
         setups.Add([]);
         SolverResult selected = baseline;
+        FrontierContinuationScheduler continuationScheduler = new(context);
         int attempts = 0;
         foreach (PlanAction[] setup in setups)
         {
@@ -40,31 +44,28 @@ internal static partial class CombatSearchCoordinator
             openings.Add(setup);
             foreach (PlanAction[] opening in openings)
             {
-                IReadOnlyList<PlanAction> nightmareActions = builder.BuildOpeningNightmareActionsAfterPrefix(opening);
+                IReadOnlyList<PlanAction> nightmareActions = builder.BuildOpeningCopyActionsAfterPrefix(opening);
                 foreach (PlanAction nightmare in nightmareActions)
                 {
-                    long remainingNodes = profile.MaxExpandedNodes
-                        - (policy.RequestWorkTotals?.Snapshot().ExpandedNodes ?? 0L);
-                    if (remainingNodes <= 0)
+                    SearchBudgetWindow routeWindow = context.Budget.ProfileWindow(profile);
+                    if (routeWindow.RemainingNodes <= 0)
                         return selected;
-                    SolverSearchProfile routeProfile = profile with
+                    SolverSearchProfile routeProfile = routeWindow.Limit(profile,
+                        maximumNodes: 30_000, maximumMilliseconds: 15_000,
+                        reserveMilliseconds: 0) with
                     {
-                        MaxExpandedNodes = (int)Math.Min(30_000L, remainingNodes),
-                        SoftTimeBudgetMilliseconds = Math.Min(profile.SoftTimeBudgetMilliseconds, 15_000),
                         AggressivePowerCommitment = false,
                     };
                     PlanAction[] prefix = [.. opening, nightmare];
                     bool usesPotion = opening.Any(action => action.Kind == PlanActionKind.UsePotion);
-                    SolverResult? candidate = SolveOptionalPotionPosterior(
-                        new CombatBeamSolver(root, displayNames, battleDamage, policy,
-                            cancellationToken, progressCallback, routeProfile,
-                            potionPolicyOverride: usesPotion
-                                ? SolverPotionPolicy.RequireAtLeastOne
+                    SolverResult? candidate = continuationScheduler.DispatchOptional(
+                        new ContinuationSearchRequest(context,
+                            ContinuationPurpose.NightmareCopyPosterior,
+                            prefix, routeProfile,
+                            usesPotion ? SolverPotionPolicy.RequireAtLeastOne
                                 : SolverPotionPolicy.Disabled,
-                            maximumPotionUses: usesPotion ? 1 : 0,
-                            fixedPrefixActions: prefix,
-                            resetFixedPrefixSchedulingBaseline: true),
-                        policy, "NIGHTMARE_COPY_POSTERIOR");
+                            usesPotion ? 1 : 0, null),
+                        "NIGHTMARE_COPY_POSTERIOR");
                     if (candidate != null)
                     {
                         if (candidate.ResultScope != SolverResultScope.SearchCompletion)
@@ -93,18 +94,20 @@ internal static partial class CombatSearchCoordinator
     /// 其后再补有限的双能力前缀。这里直接比较最终真实战损，不把能力估值带进终局排序。
     /// </summary>
     private static SolverResult RunOpeningPowerRoutePortfolio(
-        CombatRootSnapshot root,
-        SolverDisplayNames displayNames,
-        BattleDamageSnapshot battleDamage,
-        SearchPolicySnapshot policy,
-        CancellationToken cancellationToken,
-        Action<SolverProgress>? progressCallback,
-        SolverSearchProfile profile,
+        SearchPassContext context,
         SolverPotionPolicy? potionPolicyOverride,
         SolverResult baseline,
         bool generatedAfterOpeningPotionsOnly = false)
     {
-        if (!root.PlayerCardIds.Any(PowerCardValuationModels.Registry.ContainsCardId))
+        CombatRootSnapshot root = context.Root;
+        SolverDisplayNames displayNames = context.DisplayNames;
+        BattleDamageSnapshot battleDamage = context.BattleDamage;
+        SearchPolicySnapshot policy = context.Policy;
+        CancellationToken cancellationToken = context.CancellationToken;
+        Action<SolverProgress>? progressCallback = context.ProgressCallback;
+        SolverSearchProfile profile = context.Profile;
+        if (policy.IncludeTurnSetup
+            || !root.PlayerCardIds.Any(PowerCardValuationModels.Registry.ContainsCardId))
             return baseline;
         if (CanFinishTargetPortfolio(root, policy, profile, baseline))
         {
@@ -249,6 +252,7 @@ internal static partial class CombatSearchCoordinator
             $"nodes_each={perRouteNodes} time_ms_each={perRouteMilliseconds}");
 
         SolverResult selected = baseline;
+        FrontierContinuationScheduler continuationScheduler = new(context);
         int memberIndex = 0;
         foreach (PlanAction[] prefix in prefixes)
         {
@@ -287,22 +291,18 @@ internal static partial class CombatSearchCoordinator
                     MaxExpandedNodes = perRouteNodes,
                     SoftTimeBudgetMilliseconds = perRouteMilliseconds,
                 };
-                SearchRequestWorkSnapshot before = policy.RequestWorkTotals?.Snapshot() ?? default;
+                SearchRequestWorkSnapshot before = context.Budget.WorkTotals.Snapshot();
                 long allocatedBefore = GC.GetTotalAllocatedBytes(precise: false);
                 long startedAt = Environment.TickCount64;
-                SolverResult candidate = new CombatBeamSolver(
-                    root,
-                    displayNames,
-                    battleDamage,
-                    policy,
-                    cancellationToken,
-                    progressCallback == null
-                        ? null
-                        : progress => progressCallback(progress with { Phase = "正在深搜能力路线" }),
-                    routeProfile,
-                    potionPolicyOverride: potionPolicyOverride,
-                    fixedPrefixActions: prefix,
-                    resetFixedPrefixSchedulingBaseline: true).Solve();
+                SolverResult candidate = continuationScheduler.Dispatch(
+                    new ContinuationSearchRequest(context,
+                        ContinuationPurpose.OpeningPowerRouteMember,
+                        prefix, routeProfile, potionPolicyOverride, null, null)
+                    {
+                        ProgressCallbackOverride = progressCallback == null
+                            ? null
+                            : progress => progressCallback(progress with { Phase = "正在深搜能力路线" }),
+                    });
                 if (candidate.ResultScope != SolverResultScope.SearchCompletion)
                     return candidate;
 
@@ -311,7 +311,7 @@ internal static partial class CombatSearchCoordinator
                 bool improved = IsBetterPotionPolicyResult(root, policy, candidate, selected);
                 if (improved)
                     selected = candidate;
-                SearchRequestWorkSnapshot after = policy.RequestWorkTotals?.Snapshot() ?? default;
+                SearchRequestWorkSnapshot after = context.Budget.WorkTotals.Snapshot();
                 long elapsed = Math.Max(0, Environment.TickCount64 - startedAt);
                 long allocated = Math.Max(
                     0,

@@ -1070,11 +1070,10 @@ internal sealed partial class CombatBeamSolver
         SearchNode right,
         int bestMaxHp)
     {
-        int comparison = CycleHealthRisk(left, bestMaxHp)
-            .CompareTo(CycleHealthRisk(right, bestMaxHp));
-        if (comparison != 0)
-            return comparison;
-        comparison = left.PotionStrategicCost.CompareTo(right.PotionStrategicCost);
+        int comparison = RouteQualityPolicy.Compare(
+            RouteQuality.ForRetention(CycleHealthRisk(left, bestMaxHp), left.PotionStrategicCost),
+            RouteQuality.ForRetention(CycleHealthRisk(right, bestMaxHp), right.PotionStrategicCost),
+            RouteQualityProjection.RetentionCost);
         if (comparison != 0)
             return comparison;
         comparison = left.Turn.CompareTo(right.Turn);
@@ -1286,11 +1285,10 @@ internal sealed partial class CombatBeamSolver
         SearchNode right,
         int bestMaxHp)
     {
-        int comparison = CycleHealthRisk(left, bestMaxHp)
-            .CompareTo(CycleHealthRisk(right, bestMaxHp));
-        if (comparison != 0)
-            return comparison;
-        comparison = left.PotionStrategicCost.CompareTo(right.PotionStrategicCost);
+        int comparison = RouteQualityPolicy.Compare(
+            RouteQuality.ForRetention(CycleHealthRisk(left, bestMaxHp), left.PotionStrategicCost),
+            RouteQuality.ForRetention(CycleHealthRisk(right, bestMaxHp), right.PotionStrategicCost),
+            RouteQualityProjection.RetentionCost);
         if (comparison != 0)
             return comparison;
         bool leftChanged = left.CrossTurnProbe?.LastTurnChangedSemanticState
@@ -1351,11 +1349,10 @@ internal sealed partial class CombatBeamSolver
     {
         // Finish an already-issued exact phase lease before rotating to another family.
         // The lease remains bounded by the repetition budget and never affects final quality.
-        int comparison = CycleHealthRisk(left, bestMaxHp)
-            .CompareTo(CycleHealthRisk(right, bestMaxHp));
-        if (comparison != 0)
-            return comparison;
-        comparison = left.PotionStrategicCost.CompareTo(right.PotionStrategicCost);
+        int comparison = RouteQualityPolicy.Compare(
+            RouteQuality.ForRetention(CycleHealthRisk(left, bestMaxHp), left.PotionStrategicCost),
+            RouteQuality.ForRetention(CycleHealthRisk(right, bestMaxHp), right.PotionStrategicCost),
+            RouteQualityProjection.RetentionCost);
         if (comparison != 0)
             return comparison;
         comparison = left.Turn.CompareTo(right.Turn);

@@ -18,6 +18,12 @@ internal sealed partial class UnattendedTestRunner
         public async Task RunBeforeExecutionAsync(ScenarioContext scenario)
         {
             UnattendedTestRequest request = runner._request;
+            if (request.ScenarioId == "MEMORY-DISPLAY-CONTRACT")
+            {
+                runner.SetStage("memory_display_contract");
+                SearchMemoryUsageSnapshot sample = AssertMemoryDisplayContract();
+                runner._completedChecks.Add($"MemoryDisplay:PhysicalCapacity:Idle:Search:Reclaim:OverThreshold:ServerGC={sample.IsServerGc}");
+            }
             if (request.ScenarioId == "POTION-GENERATION-CACHE")
             {
                 runner.SetStage("potion_generation_cache");
@@ -178,6 +184,12 @@ internal sealed partial class UnattendedTestRunner
                 runner.SetStage("prediction_failure_boundaries");
                 AssertPredictionFailureBoundaries(scenario.CombatState, scenario.Player);
                 runner._completedChecks.Add("PredictionFailureBoundaries");
+            }
+            if (request.ScenarioId == "ADMITTED-JOB-FAILURE-ACCOUNTING")
+            {
+                runner.SetStage("admitted_job_failure_accounting");
+                await AssertAdmittedJobFailureAccountingAsync(scenario.CombatState);
+                runner._completedChecks.Add("AdmittedJobFailureAccounting");
             }
             if (request.ScenarioId == "LAZY-RNG-FORK")
             {

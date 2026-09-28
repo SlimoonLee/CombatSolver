@@ -195,7 +195,7 @@ internal sealed partial class UnattendedTestRunner
         IReadOnlyList<PlanAction> actions, SimulationSnapshot? parent, int turn,
         ActionRelicTriggerRecorder? triggers)
         => (SimulationSnapshot)InvokeForcedTerminalMethod(driver, "Replay",
-            [actions, parent, turn, 0, triggers, null, null, null, null, null, null, null, true, true])!;
+            [actions, parent, turn, 0, triggers, null, null, null, null, null, null, null, true, true, null])!;
 
     private static object? InvokeForcedTerminalMethod(CombatBeamSolver driver, string name, object?[] arguments)
     {

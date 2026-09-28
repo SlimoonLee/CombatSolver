@@ -260,6 +260,8 @@ internal sealed class UnattendedTestRequest
     public SolverPerformancePreset? PerformancePresetForTest { get; init; }
     public int? SearchBeamWidthForTest { get; init; }
     public int? SearchMaxExpandedNodesForTest { get; init; }
+    public BeamWeightTerm? BeamWeightTermForTest { get; init; }
+    public double? BeamWeightScaleForTest { get; init; }
     public int? ShortMaxCardBranchesPerNodeForTest { get; init; }
     public int? DeepMaxCardBranchesPerNodeForTest { get; init; }
     public SolverPotionPolicy? PotionPolicyForTest { get; init; }
@@ -607,6 +609,7 @@ internal sealed class UnattendedSolverMetrics
     public long TotalChoiceBranches { get; init; }
     public double ElapsedMilliseconds { get; init; }
     public double TotalElapsedMilliseconds { get; init; }
+    public SearchWorkAttribution[] SearchWorkAttributions { get; init; } = [];
     public long WorkerAllocatedBytes { get; init; }
     public long TotalWorkerAllocatedBytes { get; init; }
     public int TotalGen0Collections { get; init; }

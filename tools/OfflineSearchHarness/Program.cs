@@ -80,6 +80,10 @@ internal static class Program
             if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_PROBE_STATICS") is { Length: > 0 } filter)
                 Step(steps, "P 静态构造探针", () => $"types={GameBootstrap.ProbeStaticConstructors(filter)}");
             GeneratedScenarioSetup? generated = null;
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_MEMORY_DISPLAY_CHECKS") == "1")
+                MemoryDisplayChecks.Run();
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_MEMORY_DISPLAY_CHECKS") == "baseline")
+                MemoryDisplayChecks.ReproduceOldCapacity();
             UnattendedTestRunner.OfflineScenarioSession? session = null;
             CombatState? combat = null;
             ObservedCardSelector? observedSelector = null;
@@ -178,6 +182,8 @@ internal static class Program
             reached = "M1";
             if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_HISTORY_CHECKS") == "1")
                 HistoryCounterChecks.Run(combat!, options.OutputDirectory);
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_INFUSED_CORE_CHECKS") == "1")
+                InfusedCoreChecks.Run(combat!, options.OutputDirectory);
             payload["budget"] = DescribeBudget(options);
             payload["root"] = OfflineCombat.DescribeRoot(combat!);
             string diagnostics = options.BlindSamples > 0
@@ -187,7 +193,16 @@ internal static class Program
             File.WriteAllText(Path.Combine(options.OutputDirectory, "root-diagnostics.txt"), diagnostics);
             WriteProgress(options, "M1", "ok", "已到达玩家第一回合");
 
-            if (options.Milestone != "M1" && !options.PlayCombat)
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_FIXED_PREFIX_CONTINUATIONS") == "1")
+            {
+                Step(steps, "M2 固定长前缀续用测量", () =>
+                {
+                    payload["fixedPrefixContinuations"] = FixedPrefixContinuationBenchmark.Run(combat!, options, loop);
+                    return "N4/N8/N17; fixed-prefix-continuations.json";
+                });
+                reached = "M2";
+            }
+            else if (options.Milestone != "M1" && !options.PlayCombat)
             {
                 ModRuntime.SearchOutcome? outcome = null;
                 using MemorySampler memory = new(TimeSpan.FromMilliseconds(100));
@@ -226,6 +241,7 @@ internal static class Program
                 // 宿主自己从 SolverResult 读的剪枝/复用计数（游戏内 result.json 没有这些字段）。
                 payload["pruneCounters"] = outcome.LegacyMetrics;
                 payload["searchPolicy"] = outcome.Policy;
+                payload["comparisonQuality"] = outcome.Result.ComparisonQuality;
                 payload["phasePerformance"] = ModRuntime.LastPhasePerformance;
                 File.WriteAllText(
                     Path.Combine(options.OutputDirectory, "search-policy.json"),
@@ -357,6 +373,7 @@ internal static class Program
                 ["rootContinuationStamp"] = payload.GetValueOrDefault("search") is Dictionary<string, object?> s
                     ? s.GetValueOrDefault("rootContinuationStamp")
                     : null,
+                ["comparisonQuality"] = payload.GetValueOrDefault("comparisonQuality"),
                 ["continuations"] = payload.GetValueOrDefault("search") is Dictionary<string, object?> search
                     ? search.GetValueOrDefault("continuations")
                     : null,

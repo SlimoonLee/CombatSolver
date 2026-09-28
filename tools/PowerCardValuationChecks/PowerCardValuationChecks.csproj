@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/Search/PowerCardValuation/PowerCardValuationContracts.cs" Link="PowerCardValuationContracts.cs" />
+    <Compile Include="../../src/Search/PlanHorizonPolicy.cs" Link="PlanHorizonPolicy.cs" />
     <Compile Include="../../src/Search/PowerCardValuation/IPowerCardValuationModel.cs" Link="IPowerCardValuationModel.cs" />
     <Compile Include="../../src/Search/PowerCardValuation/PowerCardValuationRegistry.cs" Link="PowerCardValuationRegistry.cs" />
     <Compile Include="../../src/Search/PowerCardValuation/PowerCardValuationModels.cs" Link="PowerCardValuationModels.cs" />

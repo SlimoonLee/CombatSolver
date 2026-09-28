@@ -5,16 +5,22 @@ namespace CombatSolver;
 internal static partial class CombatSearchCoordinator
 {
     private static SolverResult RunNoveltyPortfolioPass(
-        CombatRootSnapshot root, SolverDisplayNames names, BattleDamageSnapshot damage,
-        SearchPolicySnapshot policy, SolverSearchProfile profile, Stopwatch clock,
-        SolverPotionPolicy? potionOverride, CancellationToken cancellation,
-        Action<SolverProgress>? progress, Action<SolverResult>? publish,
+        SearchPassContext context,
+        SolverPotionPolicy? potionOverride,
         Func<SolverSearchProfile, SolverResult> solveBaseline)
     {
+        CombatRootSnapshot root = context.Root;
+        SolverDisplayNames names = context.DisplayNames;
+        BattleDamageSnapshot damage = context.BattleDamage;
+        SearchPolicySnapshot policy = context.Policy;
+        SolverSearchProfile profile = context.Profile;
+        Stopwatch clock = context.Clock;
+        CancellationToken cancellation = context.CancellationToken;
+        Action<SolverProgress>? progress = context.ProgressCallback;
+        Action<SolverResult>? publish = context.InterimResultCallback;
         if (profile.AdaptiveNoveltyRefinement)
         {
-            return RunAdaptiveNoveltyRefinement(root, names, damage, policy, profile,
-                clock, potionOverride, cancellation, progress, publish, solveBaseline);
+            return RunAdaptiveNoveltyRefinement(context, potionOverride, solveBaseline);
         }
         SolverSearchProfile? explorationProfile = policy.NoveltyBudget.Exploration(profile, root.IsActEndingBoss);
         if (explorationProfile == null)
@@ -25,14 +31,14 @@ internal static partial class CombatSearchCoordinator
                 profile.MaxExpandedNodes, profile.SoftTimeBudgetMilliseconds);
             return unchanged;
         }
-        SearchRequestWorkTotals totals = policy.RequestWorkTotals
-            ?? throw new InvalidOperationException("Novelty portfolio requires request work totals.");
+        SearchRequestWorkTotals totals = context.Budget.WorkTotals;
         long expandedBefore = totals.Snapshot().ExpandedNodes;
         // Missing mandatory potion routes are a defined search boundary. Beam still gets
         // the remainder; simulation errors and caller cancellation propagate normally.
         SolverResult? exploration = SolveOptionalPotionPosterior(new CombatBeamSolver(root, names, damage,
             policy with { NoveltySearch = policy.NoveltySearch ?? new() }, cancellation,
-            progress, explorationProfile, potionPolicyOverride: potionOverride), policy, "novelty_exploration");
+            progress, explorationProfile, potionPolicyOverride: potionOverride,
+            directSearchPurpose: DirectSearchPurpose.NoveltyExploration), policy, "novelty_exploration");
         long explorationExpanded = totals.Snapshot().ExpandedNodes - expandedBefore;
         long explorationElapsed = clock.ElapsedMilliseconds;
         if (exploration != null && IsCompleteVictory(exploration)) publish?.Invoke(exploration);
@@ -73,14 +79,20 @@ internal static partial class CombatSearchCoordinator
     }
 
     private static SolverResult RunAdaptiveNoveltyRefinement(
-        CombatRootSnapshot root, SolverDisplayNames names, BattleDamageSnapshot damage,
-        SearchPolicySnapshot policy, SolverSearchProfile profile, Stopwatch clock,
-        SolverPotionPolicy? potionOverride, CancellationToken cancellation,
-        Action<SolverProgress>? progress, Action<SolverResult>? publish,
+        SearchPassContext context,
+        SolverPotionPolicy? potionOverride,
         Func<SolverSearchProfile, SolverResult> solveBaseline)
     {
-        SearchRequestWorkTotals totals = policy.RequestWorkTotals
-            ?? throw new InvalidOperationException("Adaptive novelty refinement requires request work totals.");
+        CombatRootSnapshot root = context.Root;
+        SolverDisplayNames names = context.DisplayNames;
+        BattleDamageSnapshot damage = context.BattleDamage;
+        SearchPolicySnapshot policy = context.Policy;
+        SolverSearchProfile profile = context.Profile;
+        Stopwatch clock = context.Clock;
+        CancellationToken cancellation = context.CancellationToken;
+        Action<SolverProgress>? progress = context.ProgressCallback;
+        Action<SolverResult>? publish = context.InterimResultCallback;
+        SearchRequestWorkTotals totals = context.Budget.WorkTotals;
         long beforeExpanded = totals.Snapshot().ExpandedNodes;
         long beforeMilliseconds = clock.ElapsedMilliseconds;
         SolverResult baseline = solveBaseline(profile);
@@ -111,7 +123,8 @@ internal static partial class CombatSearchCoordinator
             $"time_ms={refinement.SoftTimeBudgetMilliseconds}");
         SolverResult? exploration = SolveOptionalPotionPosterior(new CombatBeamSolver(
             root, names, damage, policy with { NoveltySearch = policy.NoveltySearch ?? new() },
-            cancellation, progress, refinement, potionPolicyOverride: potionOverride),
+            cancellation, progress, refinement, potionPolicyOverride: potionOverride,
+            directSearchPurpose: DirectSearchPurpose.AdaptiveNoveltyRefinement),
             policy, "adaptive_novelty_refinement");
         SearchRequestWorkSnapshot scoutAfter = totals.Snapshot();
         long expanded = scoutAfter.ExpandedNodes - scoutBefore.ExpandedNodes;

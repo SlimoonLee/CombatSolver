@@ -92,6 +92,7 @@ namespace CombatSolver
     public static class Entry
     {
         public static bool Enabled = true;
+        public static bool IsPreCombatWorker { get; set; }
         public static TestLogger Logger = new();
     }
     public sealed class TestLogger { public void Error(string message) => throw new Exception(message); }

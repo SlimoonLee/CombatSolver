@@ -25,6 +25,13 @@ Require(new PowerCardValuationResult(
     "净战略价值没有保留负向惩罚。");
 RequireThrows<ArgumentOutOfRangeException>(() => new PowerCardValuationReward(damage: -1));
 RequireThrows<ArgumentOutOfRangeException>(() => new PowerCardValuationPenalty(activationCost: -1));
+Require(!PlanHorizonPolicy.ShouldExtend(16, 16, 5, payoffRealized: false),
+    "未兑现计划改变了普通无进展边界。");
+Require(PlanHorizonPolicy.ShouldExtend(16, 16, 5, payoffRealized: true)
+    && PlanHorizonPolicy.ShouldExtend(20, 16, 5, payoffRealized: true),
+    "已兑现计划没有获得一个牌堆周期的续期。");
+Require(!PlanHorizonPolicy.ShouldExtend(21, 16, 5, payoffRealized: true),
+    "计划续期超过了一个牌堆周期。");
 
 // 2. 空登记表与未登记旁路。
 PowerCardValuationRegistry empty = new([]);

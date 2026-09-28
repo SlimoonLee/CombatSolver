@@ -67,19 +67,16 @@ internal sealed partial class CombatBeamSolver
                 leftWon, leftSnapshot.OutstandingStolenResource, rightWon, rightSnapshot.OutstandingStolenResource);
             if (recoveryComparison != 0)
                 return recoveryComparison;
-            comparison = SolverInterimResultOrdering.ComparePrimaryQuality(
-                leftWon,
-                StrategicHpDeficit(leftSnapshot, leftWon),
-                leftWon ? CompletedCombatTurn(left) : null,
-                rightWon,
-                StrategicHpDeficit(rightSnapshot, rightWon),
-                rightWon ? CompletedCombatTurn(right) : null,
-                leftSnapshot.StrategyGoalHpCredit,
-                rightSnapshot.StrategyGoalHpCredit,
-                leftSnapshot.StrategyGoalCount,
-                rightSnapshot.StrategyGoalCount,
-                leftSnapshot.ProjectedDeathSaveUseCount,
-                rightSnapshot.ProjectedDeathSaveUseCount);
+            comparison = RouteQualityPolicy.Compare(
+                RouteQuality.Primary(leftWon, StrategicHpDeficit(leftSnapshot, leftWon),
+                    leftWon ? CompletedCombatTurn(left) : null,
+                    leftSnapshot.StrategyGoalHpCredit, leftSnapshot.StrategyGoalCount,
+                    leftSnapshot.ProjectedDeathSaveUseCount),
+                RouteQuality.Primary(rightWon, StrategicHpDeficit(rightSnapshot, rightWon),
+                    rightWon ? CompletedCombatTurn(right) : null,
+                    rightSnapshot.StrategyGoalHpCredit, rightSnapshot.StrategyGoalCount,
+                    rightSnapshot.ProjectedDeathSaveUseCount),
+                RouteQualityProjection.Primary);
             if (comparison != 0)
                 return comparison;
 

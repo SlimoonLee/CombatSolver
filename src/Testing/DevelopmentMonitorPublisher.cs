@@ -36,6 +36,9 @@ internal sealed class DevelopmentMonitorPublisher : IAsyncDisposable
                         ["remainingMilliseconds"] = progress == null ? null
                             : Math.Max(0, progress.RequestBudgetMilliseconds - progress.ElapsedMilliseconds),
                         ["expandedNodes"] = progress?.ExpandedNodes,
+                        ["memberMaxNodes"] = progress?.MaxNodes,
+                        ["endedNodes"] = progress?.EndedNodes,
+                        ["completedTurnLayers"] = progress?.CompletedTurnLayers,
                         ["reviewedWorldlines"] = progress?.ReviewedWorldlines,
                         ["worldlinesPerSecond"] = progress is { ElapsedMilliseconds: > 0 }
                             ? Math.Round(progress.ReviewedWorldlines * 1000d / progress.ElapsedMilliseconds, 1) : null,

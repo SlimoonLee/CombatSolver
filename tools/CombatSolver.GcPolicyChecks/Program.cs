@@ -6,6 +6,7 @@ else if (args is ["recovery-lifecycle"])
 {
     PolicyCheck.Run("actual region loss and bounded recovery", GcRecoveryChecks.RunLifecycle);
     PolicyCheck.Run("exit request invalidates pending recovery", GcRecoveryChecks.RunExitGuard);
+    PolicyCheck.Run("explicit default-GC exit stays permanent", GcRecoveryChecks.RunExplicitDefaultExit);
 }
 else if (args is ["recovery"])
     GcRecoveryChecks.Run();

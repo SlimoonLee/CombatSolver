@@ -2,6 +2,27 @@ namespace CombatSolver;
 
 internal sealed partial class UnattendedTestRunner
 {
+    private static async Task AssertAdmittedJobFailureAccountingAsync(
+        MegaCrit.Sts2.Core.Combat.CombatState combat)
+    {
+        SearchPolicySnapshot policy = SolverController.CaptureSearchPolicy(
+            SolverSettings.Capture(), combat, includeTurnSetup: false,
+            theftPolicy: SolverController.ResolveTheftPolicy(combat));
+        policy = policy with
+        {
+            Profile = policy.Profile with { MaxExpandedNodes = 250, SoftTimeBudgetMilliseconds = 10_000 },
+            FixedBudget = true,
+            VerifyIncrementalSearch = false,
+        };
+        CombatRootSnapshot root = CombatRootSnapshot.Capture(combat);
+        SolverDisplayNames names = SolverDisplayNames.Capture(combat);
+        BattleDamageSnapshot damage = BattleDamageTracker.Observe(combat);
+        await AssertParallelExpansionFailureDrainAsync(root, names, damage, policy);
+        await Task.Run(() => new CombatBeamSolver(root, names, damage,
+            policy with { MaxDegreeOfParallelism = 2 }, CancellationToken.None,
+            potionPolicyOverride: SolverPotionPolicy.Disabled).Solve());
+    }
+
     private static async Task AssertParallelExpansionFailureDrainAsync(
         CombatRootSnapshot rootSnapshot,
         SolverDisplayNames displayNames,
@@ -15,6 +36,7 @@ internal sealed partial class UnattendedTestRunner
             int generated = 0;
             int callbacksActive = 0;
             int triggered = 0;
+            long injectedAllocation = 0;
             SearchRequestWorkTotals totals = new();
             SearchPathObserver observer = new(_ => true, observation =>
             {
@@ -28,8 +50,11 @@ internal sealed partial class UnattendedTestRunner
                 Interlocked.Increment(ref callbacksActive);
                 try
                 {
-                    if (Interlocked.Increment(ref generated) != 8)
+                    if (Interlocked.Increment(ref generated) != 1)
                         return;
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    GC.KeepAlive(new byte[64 * 1024 * 1024]);
+                    Interlocked.Add(ref injectedAllocation, GC.GetAllocatedBytesForCurrentThread() - before);
                     Volatile.Write(ref triggered, 1);
                     if (injectError)
                         throw injectedError;
@@ -69,13 +94,14 @@ internal sealed partial class UnattendedTestRunner
                 || Volatile.Read(ref callbacksActive) != 0
                 || totals.RecordedSolverCountForTesting != 1
                 || work.TransitionCount <= 0
-                || work.WorkerAllocatedBytes <= 0)
+                || work.WorkerAllocatedBytes < injectedAllocation)
             {
                 throw new InvalidOperationException(
                     $"在途并行作业未排空或未精确记录部分工作：error={injectError} " +
                     $"triggered={triggered} callbacks={callbacksActive} " +
                     $"records={totals.RecordedSolverCountForTesting} " +
-                    $"transitions={work.TransitionCount} allocated={work.WorkerAllocatedBytes}。");
+                    $"transitions={work.TransitionCount} allocated={work.WorkerAllocatedBytes} " +
+                    $"injected_allocation={injectedAllocation}。");
             }
         }
         // The caller subsequently reuses this captured root for complete DOP2/DOP1 comparison.

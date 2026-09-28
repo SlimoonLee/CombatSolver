@@ -102,6 +102,11 @@ internal sealed class SolvedRouteCache(string path)
             using FileStream stream = File.OpenRead(Path);
             SolverResult result = JsonSerializer.Deserialize<SolverResult>(stream, Options(currentForecast))
                 ?? throw new InvalidDataException($"Empty solved route: {Path}");
+            if (!result.TryValidateTurnOutcomes(out string? failure))
+            {
+                Log($"INCOMPLETE_TURN_OUTCOMES path={Path} reason={failure}");
+                return null;
+            }
             result.WasRestoredFromCache = true;
             return result;
         }
@@ -114,11 +119,19 @@ internal sealed class SolvedRouteCache(string path)
     }
 
     internal static byte[] SerializeRoute(SolverResult result)
-        => JsonSerializer.SerializeToUtf8Bytes(result, Options(result.Forecast));
+    {
+        result.AssertCompleteTurnOutcomes();
+        return JsonSerializer.SerializeToUtf8Bytes(result, Options(result.Forecast));
+    }
 
     internal static SolverResult DeserializeRoute(ReadOnlySpan<byte> bytes, IntentForecast currentForecast)
-        => JsonSerializer.Deserialize<SolverResult>(bytes, Options(currentForecast))
-           ?? throw new InvalidDataException("录像包中的预计算路线为空。");
+    {
+        SolverResult result = JsonSerializer.Deserialize<SolverResult>(bytes, Options(currentForecast))
+            ?? throw new InvalidDataException("录像包中的预计算路线为空。");
+        if (!result.TryValidateTurnOutcomes(out string? failure))
+            throw new InvalidDataException($"录像路线回合统计不完整：{failure}。");
+        return result;
+    }
 
     // 写入或清理失败只损失这条缓存，已经算出的路线照常交付。
     public void StoreFirst(SolverResult result)

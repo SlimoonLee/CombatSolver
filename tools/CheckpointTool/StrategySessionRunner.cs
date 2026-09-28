@@ -198,6 +198,7 @@ internal static class StrategySessionRunner
                 "Early turn exploration deadline must be 15..2400 seconds.");
         const string mode = "SearchOnly";
         Stopwatch watch = Stopwatch.StartNew();
+        DateTimeOffset startedUtc = DateTimeOffset.UtcNow;
         bool monitorEnabled = state["monitorEnabled"]?.GetValue<bool>() == true;
         string? monitorPath = monitorEnabled ? Path.Combine(session, "monitor-state.json") : null;
         JsonObject row = new()
@@ -206,7 +207,7 @@ internal static class StrategySessionRunner
             ["timeoutSeconds"] = timeoutSeconds,
             ["earlyTurnExplorationDepth"] = earlyTurnDepth,
             ["performancePreset"] = "VeryHigh",
-            ["searchMaxDegreeOfParallelism"] = 8, ["startedUtc"] = DateTimeOffset.UtcNow,
+            ["searchMaxDegreeOfParallelism"] = 8, ["startedUtc"] = startedUtc,
         };
         int exit = 1;
         try
@@ -275,6 +276,14 @@ internal static class StrategySessionRunner
                 int stopExit = await BatchRunner.Launch(project, LauncherOptions(state), evidence,
                     DefaultTimeoutSeconds, null, selector, mode, null, stop: true);
                 row["timeoutStopExitCode"] = stopExit;
+                JsonObject? progress = monitorPath == null ? null : Read(monitorPath);
+                if (progress?["reportId"]?.ToString() == Path.GetFileNameWithoutExtension(archive)
+                    && DateTimeOffset.TryParse(progress["updatedUtc"]?.ToString(), out DateTimeOffset updatedUtc)
+                    && updatedUtc >= startedUtc)
+                {
+                    Save(Path.Combine(evidence, "timeout-progress.json"), progress);
+                    row["timeoutProgress"] = progress.DeepClone();
+                }
             }
             return row["status"]?.ToString() == "search_completed" ? 0 : 1;
         }

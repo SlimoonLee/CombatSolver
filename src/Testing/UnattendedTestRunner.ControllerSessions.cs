@@ -343,6 +343,12 @@ internal sealed partial class UnattendedTestRunner
         if (!SolverOverlay.BeamWidthPortfolioControlConfiguredForTesting)
             throw new InvalidOperationException("多宽度路线精炼开关没有归属性能设置页或状态未同步。");
         bool memoryUsageBarConfigured = SolverOverlay.MemoryUsageBarConfiguredForTesting;
+        // 进入战斗时模型注册表早已初始化，生命周期信号必须已送达；模组类型在此之前不得进缓存。
+        if (!ModelDbGetIdCachePatch.ModelRegistryInitializedForTesting
+            || !ModelDbGetIdCachePatch.ExerciseRegistrationGateForTesting(typeof(SolverOverlay)))
+        {
+            throw new InvalidOperationException("ModelDb.GetId 缓存没有按模型注册表初始化时点区分模组类型。");
+        }
         bool memoryUsageBarFormatting = SolverOverlay.ExerciseMemoryUsageBarForTesting();
         if (!memoryUsageBarConfigured || !memoryUsageBarFormatting)
         {

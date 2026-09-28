@@ -71,6 +71,48 @@ internal static class GcRecoveryChecks
         }
     }
 
+    public static void RunExplicitDefaultExit()
+    {
+        UnattendedTestRunner.IsActive = true;
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(20));
+        SearchMemoryPressureSignal signal = new();
+        ISearchGcScope? scope = null;
+        try
+        {
+            SearchGcPolicy.ReclaimIfPendingAsync("explicit_default_setup", true).GetAwaiter().GetResult();
+            scope = SearchGcPolicy.EnterSearchScope(true, 1_000_000_000, signal, deadline.Token);
+            PolicyCheck.Require(signal.IsEnabled
+                && System.Runtime.GCSettings.LatencyMode == System.Runtime.GCLatencyMode.NoGCRegion,
+                "The fixture must begin with a real CLR NoGC region.");
+
+            // Use the production callback for an indivisible search commit that exceeds
+            // the region, including ReclaimWithinSearch with restartNoGcRegion: false.
+            signal.UseDefaultGcAndContinue(deadline.Token);
+            PolicyCheck.Require(!signal.IsEnabled
+                && System.Runtime.GCSettings.LatencyMode != System.Runtime.GCLatencyMode.NoGCRegion,
+                "Explicit fallback must enter ordinary GC.");
+
+            // Supply both recovery prerequisites so a mistakenly retained allowance can
+            // establish a real region. The recovery probe itself must collect nothing.
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: false);
+            Thread.Sleep(2_100);
+            SearchGcLifecycleSnapshot before = SearchGcPolicy.CaptureLifecycle();
+            signal.TryRecoverNoGc(64 * 1024 * 1024, deadline.Token);
+            SearchGcLifecycleSnapshot delta = SearchGcPolicy.CaptureLifecycle().DeltaFrom(before);
+            PolicyCheck.Require(!signal.IsEnabled
+                && System.Runtime.GCSettings.LatencyMode != System.Runtime.GCLatencyMode.NoGCRegion
+                && delta.NoGcStartAttempts == 0 && delta.ForcedCollections == 0,
+                "An explicit ordinary-GC exit must remain permanent after a new Gen2 and cooldown.");
+            Console.WriteLine($"EXPLICIT_DEFAULT_EXIT_OK attempts={delta.NoGcStartAttempts} restarts={delta.NoGcRestarts} forced={delta.ForcedCollections}");
+        }
+        finally
+        {
+            scope?.Dispose();
+            SearchGcPolicy.ReclaimIfPendingAsync("explicit_default_cleanup", true).GetAwaiter().GetResult();
+            UnattendedTestRunner.IsActive = false;
+        }
+    }
+
     public static void Run()
     {
         PolicyCheck.Run("confirmed checkpoint GC can be consumed once without another collection", () =>
@@ -112,7 +154,7 @@ internal static class GcRecoveryChecks
             PolicyCheck.Require(!backoff.ShouldObserve(7_999), "Failed reservations back off.");
             PolicyCheck.Require(!backoff.ObserveCompletedCollection(8_000, 11), "Do not retry the same heap after a failed reservation.");
         });
-        PolicyCheck.Run("successful recovery does not reset the per-search attempt cap", () =>
+        PolicyCheck.Run("recovery attempts stay bounded in rate but never stop permanently", () =>
         {
             SearchGcPolicy.NoGcRecoveryBackoff backoff = new();
             long now = 0;
@@ -125,8 +167,90 @@ internal static class GcRecoveryChecks
                 backoff.RecordRecovery();
                 now += 2_000L << backoff.Attempts;
             }
-            PolicyCheck.Require(backoff.Attempts == 3 && !backoff.ShouldObserve(long.MaxValue),
-                "Repeated external collections cannot cause an unbounded restart loop.");
+            PolicyCheck.Require(backoff.Attempts == 3 && backoff.ShouldObserve(long.MaxValue),
+                "A long encounter must keep every chance to re-establish a region instead of running the rest of the search with no allocation ceiling at all.");
+            // Rate, not a hard stop, is what keeps a restart loop bounded: the delay saturates.
+            long cooldownStart = 10_000_000;
+            backoff.RecordAttempt(cooldownStart, 11);
+            // Attempts is 4 here, so the delay is 2_000 << 4.
+            const long expectedDelay = 2_000L << 4;
+            PolicyCheck.Require(!backoff.ShouldObserve(cooldownStart + expectedDelay - 1)
+                && backoff.ShouldObserve(cooldownStart + expectedDelay),
+                "An attempt still waits out its own cooldown before the next observation.");
+            for (int i = 0; i < 40; i++)
+                backoff.RecordAttempt(cooldownStart, 11);
+            PolicyCheck.Require(!backoff.ShouldObserve(cooldownStart + 59_999)
+                && backoff.ShouldObserve(cooldownStart + 60_000),
+                "The retry delay saturates at one minute, so attempts cannot spin or overflow.");
+            PolicyCheck.Require(backoff.Attempts == 44,
+                "Attempts keeps counting past the old cap so the delay, not a hard stop, bounds the rate.");
+        });
+        PolicyCheck.Run("attempts accumulate across fallback segments so a later segment keeps its ceiling", () =>
+        {
+            // RecordRecovery only disarms the observer; it does not reset the counter. A
+            // search that falls back and recovers repeatedly must therefore keep observing
+            // past the third segment. Sampled journals show six consecutive successful
+            // recoveries inside one scope while physical load climbed, so a cap applied to
+            // the cumulative count would have retired the probe mid-search.
+            SearchGcPolicy.NoGcRecoveryBackoff backoff = new();
+            long now = 0;
+            long gen2 = 100;
+            for (int segment = 1; segment <= 6; segment++)
+            {
+                // A segment begins with a fallback and waits for a completed collection.
+                // The first observation of a fresh arming only records the baseline.
+                backoff.ArmFallback(now, gen2);
+                // Each recorded attempt lengthens the cooldown (2_000 << attempts, saturating),
+                // so wait out the current delay before expecting an observation.
+                now += 60_000;
+                gen2++;
+                PolicyCheck.Require(backoff.ObserveCompletedCollection(now, gen2),
+                    $"Segment {segment} must observe once its cooldown and a newer collection are both present.");
+                backoff.RecordAttempt(now, gen2);
+                backoff.RecordRecovery();
+            }
+            PolicyCheck.Require(backoff.Attempts == 6,
+                "Six fallback segments must produce six recorded attempts.");
+            // The decisive part: a cumulative cap of three would leave the probe retired here,
+            // so the sixth segment could never have observed at all.
+            now += 60_000;
+            gen2++;
+            PolicyCheck.Require(backoff.ShouldObserve(now),
+                "The probe must still be observing after more segments than the old cumulative cap allowed, so a later segment keeps its allocation ceiling.");
+        });
+        PolicyCheck.Run("only memory-driven outcomes stay recoverable", () =>
+        {
+            // The probe can act on a classification whose cause changes while the process
+            // runs. Region sizing, platform support and an explicit request for ordinary
+            // collection do not change, so retrying them only repeats the same failure.
+            foreach (string recoverable in new[]
+                     {
+                         "InsufficientMemory",
+                         "SystemHeadroomInsufficient",
+                         "SkippedAfterUnexpectedLoss",
+                     })
+            {
+                PolicyCheck.Require(
+                    SearchGcPolicy.IsKnownOutcomeNameForTesting(recoverable),
+                    $"{recoverable} must remain a known start outcome.");
+                PolicyCheck.Require(
+                    SearchGcPolicy.IsRecoverableOutcomeForTesting(recoverable),
+                    $"A {recoverable} failure depends on memory, which can improve; the probe must retry it.");
+            }
+            foreach (string structural in new[]
+                     {
+                         "RegionSizeUnsupported",
+                         "PlatformUnsupported",
+                         "DefaultGcRequested",
+                     })
+            {
+                PolicyCheck.Require(
+                    SearchGcPolicy.IsKnownOutcomeNameForTesting(structural),
+                    $"{structural} must remain a known start outcome.");
+                PolicyCheck.Require(
+                    !SearchGcPolicy.IsRecoverableOutcomeForTesting(structural),
+                    $"A {structural} failure cannot change while the process runs, so the search must stay on ordinary collection.");
+            }
         });
         PolicyCheck.Run("no-progress reclaim rule stays off at limit zero", () =>
         {

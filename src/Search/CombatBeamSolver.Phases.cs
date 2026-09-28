@@ -121,7 +121,7 @@ internal sealed partial class CombatBeamSolver
             Math.Max(0, GC.CollectionCount(1) - gen1AtStart),
             Math.Max(0, GC.CollectionCount(2) - gen2AtStart),
             gcPauseDuration < TimeSpan.Zero ? TimeSpan.Zero : gcPauseDuration,
-            _run.WorkPacer.MaxObservedGcPause));
+            _run.WorkPacer.MaxObservedGcPause), _attributionPurpose, _directSearchPurpose);
     }
 
     private SolverResult SolveCore()
@@ -180,6 +180,7 @@ internal sealed partial class CombatBeamSolver
         using ParallelExpansionExecutor? parallelExpansionExecutor = expansionParallelism > 1
             ? new ParallelExpansionExecutor(this, expansionParallelism)
             : null;
+        IExpansionExecutor serialExpansionExecutor = new SerialExpansionExecutor(this);
         long lastProgressMs = -100;
         SolverInterimResult? currentBestResult = null;
         SearchNode? currentBestNode = null;
@@ -512,7 +513,7 @@ internal sealed partial class CombatBeamSolver
 
             SimulationSnapshot finalSnapshot = selectedCandidate.Snapshot;
             RouteAnnotations annotations = materializedAnnotations;
-            IReadOnlyList<CachedContinuation> continuations = BuildContinuations(best);
+            ContinuationCapture continuationCapture = PrepareContinuationCapture(best);
             int searchedTurns = Math.Max(1, best.Actions
                 .Select(action => action.Turn)
                 .DefaultIfEmpty(_startTurnNumber)
@@ -549,7 +550,8 @@ internal sealed partial class CombatBeamSolver
             try
             {
                 annotationReplay = Replay(best.Actions, annotationRoot, _startTurnNumber,
-                    priorActionCount: 0, triggerRecorder: relicTriggerRecorder, replayEvidence: replayEvidence);
+                    priorActionCount: 0, triggerRecorder: relicTriggerRecorder, replayEvidence: replayEvidence,
+                    continuationCapture: continuationCapture);
                 replayFailed = false;
             }
             finally
@@ -598,6 +600,7 @@ internal sealed partial class CombatBeamSolver
                 throw new InvalidOperationException("路线用药数量与回放药水身份不一致。");
             }
             annotationReplay.ReleaseSimulator();
+            IReadOnlyList<CachedContinuation> continuations = continuationCapture.Complete();
             IReadOnlyList<PlanAction> annotatedActions = resultScope == SolverResultScope.RouteAdoption
                 && routeAdoptionActions != null
                     ? routeAdoptionActions
@@ -868,6 +871,7 @@ internal sealed partial class CombatBeamSolver
                 Continuations = resultScope == SolverResultScope.CurrentTurnAdoption ? [] : continuations,
             };
             finalSnapshot.ReleaseSimulator();
+            result.AssertCompleteTurnOutcomes();
             return result;
         }
 
@@ -1756,6 +1760,9 @@ internal sealed partial class CombatBeamSolver
                     }
                 }
 
+                SearchNode[] serialParent = new SearchNode[1];
+                Action<SearchNode, SearchNode> acceptExpandedChild = AcceptExpandedChild;
+                Action<SearchNode> finishExpandedParent = FinishExpandedParent;
                 void ExpandNextSerially()
                 {
                     SearchMemoryPressureSignal signal = policy.MemoryPressureSignal;
@@ -1767,13 +1774,16 @@ internal sealed partial class CombatBeamSolver
                         ended.Count);
                     long allocatedBefore = signal.AllocatedBytes;
                     SearchNode node = active[activeIndex];
-                    foreach (SearchNode child in Expand(node))
+                    serialParent[0] = node;
+                    try
                     {
-                        AcceptExpandedChild(node, child);
-                        if (_run.Expanded >= _profile.MaxExpandedNodes)
-                            break;
+                        serialExpansionExecutor.Execute(
+                            serialParent, acceptExpandedChild, finishExpandedParent);
                     }
-                    FinishExpandedParent(node);
+                    finally
+                    {
+                        serialParent[0] = null!;
+                    }
                     activeIndex++;
                     ObserveParentAllocation(Math.Max(0, signal.AllocatedBytes - allocatedBefore));
                     ReclaimAfterCommittedWork("after_serial_parent");
@@ -1860,9 +1870,15 @@ internal sealed partial class CombatBeamSolver
                         TimeSpan wavePauseBefore = GC.GetTotalPauseDuration();
                         try
                         {
-                            outcomes = parallelExpansionExecutor!.Evaluate(
+                            outcomes = parallelExpansionExecutor!.Execute(
                                 workerNodes,
-                                commitOrdered: (workerIndex, batch) =>
+                                acceptExpandedChild,
+                                node =>
+                                {
+                                    FinishExpandedParent(node);
+                                    finishedEntryCount++;
+                                },
+                                beforeCommit: (workerIndex, batch) =>
                                 {
                                     rawCandidateCount += batch.Cards.Count + batch.Potions.Count + batch.EndTurns.Count;
                                     while (entries[finishedEntryCount].WorkerIndex < 0)
@@ -1873,13 +1889,6 @@ internal sealed partial class CombatBeamSolver
                                     (SearchNode node, int expectedWorker) = entries[finishedEntryCount];
                                     if (expectedWorker != workerIndex)
                                         throw new InvalidOperationException("并行展开提交顺序与父节点顺序不一致。");
-                                    CommitExpansionBatch(
-                                        node,
-                                        batch,
-                                        child => AcceptExpandedChild(node, child));
-                                    batch.Dispose();
-                                    FinishExpandedParent(node);
-                                    finishedEntryCount++;
                                 });
                             while (finishedEntryCount < entries.Count)
                             {
@@ -2265,9 +2274,6 @@ internal sealed partial class CombatBeamSolver
                     return null;
                 }
 
-                SearchNode turnStart = action.Kind == PlanActionKind.EndTurn
-                    ? FindTurnStart(node)
-                    : node;
                 SimulationSnapshot snapshot = Replay(
                     [action],
                     node.Snapshot,
@@ -2298,22 +2304,13 @@ internal sealed partial class CombatBeamSolver
                     node.CombatProgress)
                 {
                     CumulativeEnemyHpLost = cumulativeEnemyHpLost,
-                    Outcome = action.Kind == PlanActionKind.EndTurn
-                        ? new TurnOutcome(
-                            action.Turn,
-                            Math.Max(0, snapshot.CumulativePlayerHpLost
-                                - turnStart.Snapshot.CumulativePlayerHpLost),
-                            Math.Max(0, snapshot.RecoveredPlayerHp
-                                - turnStart.Snapshot.RecoveredPlayerHp),
-                            Math.Max(0, cumulativeEnemyHpLost
-                                - turnStart.CumulativeEnemyHpLost),
-                            0,
-                            node.Snapshot.PlayerBlock,
-                            node.Snapshot.PlayerBlock,
-                            node.Snapshot.Energy)
-                        : null,
                 };
                 node = AttachOrderedMutationLineage(node);
+                if (terminal || node.Turn > node.Parent!.Turn)
+                {
+                    // Fixed prefixes have no sibling alternatives for comparative HP investment or block.
+                    node = node with { Outcome = CreateUncomparedTurnOutcome(node) };
+                }
                 node.Parent!.Snapshot.ReleaseSimulator();
             }
             if (resetSchedulingBaseline && prefix.Count > 0)

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "FIXED-PREFIX-TURN-OUTCOMES",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "FIXED-PREFIX-TURN-OUTCOMES",
+  "enemyCurrentHp": 50,
+  "enableNoGcRegionForTest": false,
+  "headlessFastModeForTest": "Instant",
+  "timeoutSeconds": 120
+}

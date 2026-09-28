@@ -7,16 +7,18 @@ internal static partial class CombatSearchCoordinator
     private const int EarlyTurnExplorationNodeBudget = 1_000_000;
 
     private static SolverResult RunEarlyTurnExploration(
-        CombatRootSnapshot root,
-        SolverDisplayNames displayNames,
-        BattleDamageSnapshot battleDamage,
-        SearchPolicySnapshot policy,
-        CancellationToken cancellationToken,
-        Action<SolverProgress>? progressCallback,
-        Stopwatch requestClock,
+        SearchPassContext context,
         SolverResult selected)
     {
-        if (policy.EarlyTurnExplorationDepth == 0
+        CombatRootSnapshot root = context.Root;
+        SolverDisplayNames displayNames = context.DisplayNames;
+        BattleDamageSnapshot battleDamage = context.BattleDamage;
+        SearchPolicySnapshot policy = context.Policy;
+        CancellationToken cancellationToken = context.CancellationToken;
+        Action<SolverProgress>? progressCallback = context.ProgressCallback;
+        Stopwatch requestClock = context.Clock;
+        if (policy.IncludeTurnSetup
+            || policy.EarlyTurnExplorationDepth == 0
             || selected.ResultScope != SolverResultScope.SearchCompletion
             || IsProvenZeroDamageRoute(root, policy, selected))
             return selected;
@@ -75,7 +77,8 @@ internal static partial class CombatSearchCoordinator
             SolverResult scout = new CombatBeamSolver(root, displayNames, battleDamage,
                 scoutPolicy, cancellationToken, progressCallback, scoutProfile,
                 earlyTurnScoutDepth: policy.EarlyTurnExplorationDepth,
-                earlyTurnScoutObserver: Observe).Solve();
+                earlyTurnScoutObserver: Observe,
+                directSearchPurpose: DirectSearchPurpose.EarlyTurnScout).Solve();
             if (IsCompleteVictory(scout)
                 && IsBetterPotionPolicyResult(root, policy, scout, selected))
                 selected = scout;
@@ -108,6 +111,7 @@ internal static partial class CombatSearchCoordinator
             InterleavePotionStates(frontiers.Where(candidate => candidate.CompletedTurns == 1)),
             InterleavePotionStates(frontiers.Where(candidate => candidate.CompletedTurns == 2)),
         ];
+        FrontierContinuationScheduler continuationScheduler = new(context);
         int attempted = 0;
         for (int rank = 0; rank < 24; rank++)
         {
@@ -129,14 +133,13 @@ internal static partial class CombatSearchCoordinator
                         Math.Min(120_000, policy.Profile.MaxExpandedNodes)),
                     SoftTimeBudgetMilliseconds = RemainingMilliseconds() - 5_000,
                 };
-                SolverResult? candidate = SolveOptionalPotionPosterior(
-                    new CombatBeamSolver(root, displayNames, battleDamage, policy,
-                        cancellationToken, progressCallback, continuationProfile,
-                        potionPolicyOverride: usesPotion
-                            ? SolverPotionPolicy.RequireAtLeastOne : null,
-                        fixedPrefixActions: frontier.Actions,
-                        resetFixedPrefixSchedulingBaseline: true),
-                    policy, "EARLY_TURN_CONTINUATION");
+                SolverResult? candidate = continuationScheduler.DispatchOptional(
+                    new ContinuationSearchRequest(context,
+                        ContinuationPurpose.EarlyTurnContinuation,
+                        frontier.Actions, continuationProfile,
+                        usesPotion ? SolverPotionPolicy.RequireAtLeastOne : null,
+                        null, null),
+                    "EARLY_TURN_CONTINUATION");
                 attempted++;
                 if (candidate == null)
                     continue;

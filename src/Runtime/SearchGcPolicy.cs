@@ -2215,6 +2215,8 @@ internal static partial class SearchGcPolicy
                     RestoreLatencyModeLocked();
                     if (!cancellationToken.IsCancellationRequested)
                         restartOutcome = NoGcRegionStartOutcome.DefaultGcRequested;
+                    // Explicit exit, cancellation and a timed-out collection keep ordinary
+                    // GC for this scope. Memory-driven failures below retain recovery permission.
                     signal.UseDefaultGcFallback(
                         !cancellationToken.IsCancellationRequested
                         && fallbackSystemHeadroomConstrained);

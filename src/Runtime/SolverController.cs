@@ -205,6 +205,8 @@ internal static partial class SolverController
         => SearchGcPolicy.RolloverCountForTesting;
     internal static SearchMemoryUsageSnapshot CaptureSearchMemoryUsage()
     {
+        DateTimeOffset sampledAt = DateTimeOffset.UtcNow;
+        long startedAt = System.Environment.TickCount64;
         SearchMemoryPressureSignal? signal = _search?.MemoryPressureSignal
             ?? PlayerTurnSetupCoordinator.CurrentMemoryPressureSignal;
         SearchMemoryPressureUsage pressure = signal?.CaptureUsage()
@@ -227,16 +229,22 @@ internal static partial class SolverController
             pressure.ProjectedMemoryLoadBytes,
             systemMemoryLimit,
             pressure.Reclaiming,
-            SearchGcPolicy.IsBackgroundReclaiming);
+            SearchGcPolicy.IsBackgroundReclaiming)
+        {
+            PhysicalMemoryTotalBytes = physicalMemory.IsPhysicalSample ? physicalMemory.TotalBytes : 0,
+            SampledAtUtc = sampledAt,
+            SampleDurationMilliseconds = System.Environment.TickCount64 - startedAt,
+            IsServerGc = GCSettings.IsServerGC,
+            GcMemoryInfoIndex = memory.Index,
+            GcHighMemoryLoadThresholdBytes = memory.HighMemoryLoadThresholdBytes,
+            GcTotalAvailableMemoryBytes = memory.TotalAvailableMemoryBytes,
+        };
     }
     internal static void LogSearchMemoryDisplayState(
         SearchMemoryUsageSnapshot snapshot,
         string displayState,
         double displayRatio)
     {
-        GCMemoryInfo memory = GC.GetGCMemoryInfo();
-        using Process process = Process.GetCurrentProcess();
-        process.Refresh();
         Entry.Logger.Info(
             $"[CombatSolver/Test] MEMORY_MONITOR_DISPLAY state={displayState} " +
             $"display_ratio={displayRatio:F3} search_active={snapshot.SearchActive.ToString().ToLowerInvariant()} " +
@@ -246,22 +254,20 @@ internal static partial class SolverController
             $"projected_memory_load={snapshot.ProjectedSystemMemoryLoadBytes} " +
             $"system_memory_limit={snapshot.SystemMemoryLimitBytes} " +
             $"physical_memory_used={snapshot.PhysicalMemoryUsedBytes} " +
+            $"physical_memory_total={snapshot.PhysicalMemoryTotalBytes} " +
+            $"physical_memory_available={snapshot.PhysicalMemoryAvailableBytes?.ToString() ?? "unknown"} " +
+            $"physical_sample={snapshot.HasPhysicalMemorySample} " +
             $"system_occupied={snapshot.SystemOccupiedBytes} " +
-            $"process_memory_limit={snapshot.ProcessMemoryLimitBytes} " +
             $"system_segment={snapshot.SystemSegmentRatio:F3} " +
             $"process_segment={snapshot.ProcessSegmentRatio:F3} " +
-            $"process_pressure={snapshot.ProcessMemoryPressureRatio:F3} " +
             $"allocation_pressure={snapshot.AllocationPressureRatio:F3} " +
             $"system_pressure={snapshot.SystemPressureRatio:F3} " +
             $"system_pressure_dominates={snapshot.SystemPressureDominates.ToString().ToLowerInvariant()} " +
             $"configured_budget={snapshot.ConfiguredMemoryBudgetBytes} " +
-            $"working_set={process.WorkingSet64} private_bytes={process.PrivateMemorySize64} " +
-            $"managed_live={GC.GetTotalMemory(forceFullCollection: false)} " +
-            $"managed_heap={memory.HeapSizeBytes} fragmented={memory.FragmentedBytes} " +
-            $"memory_load={memory.MemoryLoadBytes} high_memory_threshold={memory.HighMemoryLoadThresholdBytes} " +
-            $"total_available={memory.TotalAvailableMemoryBytes} " +
-            $"gen0={GC.CollectionCount(0)} gen1={GC.CollectionCount(1)} gen2={GC.CollectionCount(2)} " +
-            $"latency={GCSettings.LatencyMode} tick_ms={System.Environment.TickCount64}");
+            $"working_set={snapshot.ProcessWorkingSetBytes} server_gc={snapshot.IsServerGc} " +
+            $"gc_info_index={snapshot.GcMemoryInfoIndex} high_memory_threshold={snapshot.GcHighMemoryLoadThresholdBytes} " +
+            $"gc_total_available={snapshot.GcTotalAvailableMemoryBytes} " +
+            $"sample_utc={snapshot.SampledAtUtc:O} sample_duration_ms={snapshot.SampleDurationMilliseconds}");
     }
     internal static long LastDeployedActionStartedAtMillisecondsForTesting { get; private set; }
     internal static Task LastCombatReferenceReleaseForTesting { get; private set; } = Task.CompletedTask;
@@ -507,7 +513,9 @@ internal static partial class SolverController
                 $"实际为 {maxDegreeOfParallelism}。");
         }
         SearchPolicySnapshot policy = new(
-            settings.Profile,
+            UnattendedTestRunner.BeamWeightPerturbationOverride is { } beamWeightPerturbation
+                ? settings.Profile with { BeamWeightPerturbation = beamWeightPerturbation }
+                : settings.Profile,
             settings.PotionPolicy,
             CapturePotionStrategy(state, settings.PotionPolicy),
             settings.EnableDetailedDiagnosticLogs,
@@ -3005,7 +3013,7 @@ internal static partial class SolverController
                     LiveEndTurnRiskProjection liveRisk = LiveEndTurnRiskEvaluator.Evaluate(
                         state,
                         plannedEndTurn.TurnStartChoices);
-                    int plannedHpLoss = result.HpLostByTurn.GetValueOrDefault(turn);
+                    int plannedHpLoss = result.RequireHpLostForTurn(turn);
                     bool worsened = liveRisk.HpLost > plannedHpLoss;
                     if ((_stopFullAutoOnDeathTurn && liveRisk.PlayerDead)
                         || (_stopFullAutoOnWorseRecalculation && worsened))

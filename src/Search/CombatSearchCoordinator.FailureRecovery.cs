@@ -35,24 +35,26 @@ internal static partial class CombatSearchCoordinator
     /// 这是一个检查点上的观察，不是普遍规律；更宽的搜索也不保证一定有更优解。
     /// </para>
     /// </remarks>
-    internal static SolverResult EscalateSearchWhenNoVictory(
-        CombatRootSnapshot root,
-        SearchPolicySnapshot policy,
-        SolverSearchProfile configured,
-        Stopwatch requestClock,
-        SolverResult primary,
-        Func<SolverSearchProfile, Stopwatch, SolverResult> runPass,
+    internal static SearchPassResult EscalateSearchWhenNoVictory(
+        SearchPassContext context,
+        SearchPassResult primary,
+        Func<SearchPassContext, SearchPassResult> runPass,
         Func<bool> stopRequested)
     {
-        SolverResult selected = primary;
+        SolverResult selected = primary.Result;
+        SearchPassResult selectedPass = primary;
+        SolverSearchProfile configured = context.Profile;
+        Stopwatch requestClock = context.Clock;
         long lastPassMilliseconds = requestClock.ElapsedMilliseconds;
         for (int completedEscalations = 0; ; completedEscalations++)
         {
             if (IsCompleteVictory(selected)
                 || selected.ResultScope != SolverResultScope.SearchCompletion
+                || selectedPass.TakeoverResult != null
+                || selectedPass.Settled
                 || stopRequested())
             {
-                return selected;
+                return selectedPass with { Result = selected };
             }
             SolverSearchProfile? escalated = BuildNoVictoryEscalationProfile(
                 configured,
@@ -60,9 +62,9 @@ internal static partial class CombatSearchCoordinator
                 requestClock.ElapsedMilliseconds,
                 lastPassMilliseconds);
             if (escalated == null)
-                return selected;
+                return selectedPass with { Result = selected };
 
-            policy.Diagnostics.Info(
+            context.Policy.Diagnostics.Info(
                 $"[CombatSolver/Test] NO_VICTORY_ESCALATION start " +
                 $"attempt={completedEscalations + 1} " +
                 $"beam={configured.BeamWidth}->{escalated.BeamWidth} " +
@@ -72,21 +74,27 @@ internal static partial class CombatSearchCoordinator
                 $"remaining_ms={escalated.SoftTimeBudgetMilliseconds} " +
                 $"last_pass_ms={lastPassMilliseconds}");
             Stopwatch passClock = Stopwatch.StartNew();
-            SolverResult candidate = runPass(escalated, passClock);
+            SearchPassResult candidatePass = runPass(context with
+            {
+                Profile = escalated,
+                Clock = passClock,
+            });
+            SolverResult candidate = candidatePass.Result;
             lastPassMilliseconds = passClock.ElapsedMilliseconds;
             if (candidate.ResultScope != SolverResultScope.SearchCompletion)
-                return candidate;
+                return candidatePass;
             // 当前补搜未严格改善就停止，限制继续扩预算的成本；这不代表更宽搜索一定没有更优解。
             bool improved = candidate.ResultScope == SolverResultScope.SearchCompletion
-                && CompareCompletedResultPrimaryQuality(root, policy, candidate, selected) < 0;
-            policy.Diagnostics.Info(
+                && CompareCompletedResultPrimaryQuality(context.Root, context.Policy, candidate, selected) < 0;
+            context.Policy.Diagnostics.Info(
                 $"[CombatSolver/Test] NO_VICTORY_ESCALATION result " +
                 $"attempt={completedEscalations + 1} " +
                 $"won={IsCompleteVictory(candidate)} improved={improved} " +
                 $"pass_ms={lastPassMilliseconds}");
             if (!improved)
-                return selected;
+                return candidatePass with { Result = selected, Quality = selectedPass.Quality };
             selected = candidate;
+            selectedPass = candidatePass;
         }
     }
 

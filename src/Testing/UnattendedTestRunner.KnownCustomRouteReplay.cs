@@ -222,7 +222,8 @@ internal sealed partial class UnattendedTestRunner
         int priorActionCount, List<SimulationSnapshot> owned)
     {
         SimulationSnapshot snapshot = (SimulationSnapshot)InvokeKnownCustomMethod(driver, "Replay",
-            [actions, parent, startingTurn, priorActionCount, null, null, null])!;
+            [actions, parent, startingTurn, priorActionCount, null, null, null,
+                null, null, null, null, null, true, true, null])!;
         owned.Add(snapshot);
         return snapshot;
     }

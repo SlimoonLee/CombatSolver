@@ -376,6 +376,11 @@ internal sealed partial class SimulatedCombatState
                         simulator.GainEnergy(relic.Owner, relic.DynamicVars.Energy.BaseValue);
                     break;
                 }
+                case InfusedCore when turn <= 1:
+                    simulator.OrbChannel<LightningOrb>(
+                        relic.Owner,
+                        relic.DynamicVars["Lightning"].IntValue);
+                    break;
                 case Lantern when turn <= 1:
                     simulator.GainEnergy(relic.Owner, relic.DynamicVars.Energy.BaseValue);
                     break;

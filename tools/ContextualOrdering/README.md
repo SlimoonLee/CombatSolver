@@ -45,7 +45,7 @@ variant 可指定自己的 `harness`。旧 DLL 需要兼容的旧宿主；引用
 
 第一轮模型已因 20 根中的 4 项退化（含胜转败）被拒绝。实际结果与限制见 [实验记录](../../docs/strategy/contextual-ordering-20260922.md)。训练没有消除未知后续和搜索分布漂移，正则/小幅修正并不保证不退化。
 
-`first_loss.py --baseline <root/baseline> --witness <root/better> --out <new-json>` 对照完整动作前缀和外层最终保留池；报告同状态别名前缀及政策标签，忽略可能被采集上限截断的最后一个边界。前缀缺席不自动等于状态/最优解丢失。新宿主的采集同时记录 GlobalRetention 和 RetentionPoolFinal，总行数仍受 N 限制。
+`first_loss.py --baseline <root/baseline> --witness <root/better> --out <new-json>` 对照完整动作前缀和外层最终保留池。边界按 `(solverId, boundaryId)` 配对，分别报告全局 Beam 落选与后续仲裁落选、同状态别名前缀及政策标签，并逐求解器忽略可能被采集上限截断的最后一个边界。前缀缺席不自动等于状态/最优解丢失；输入仍须是已采集的离线观察和见证前缀，不能直接把玩家 ZIP 当成该工具的输入。
 
 `--continuous-threat` 是另一个独立实验：只在 EndTurn 后的新回合起点、玩家实际存活且有可执行手牌时，用连续 HP 项替代中途排名里的投影死亡巨额罚分；默认关闭，不叠加模型或 base/band。终局和转置不使用该修正。20个定向训练根初筛无实质退化，但验证35根为3好/3差，最终test35根为2好/3差（含2次胜转败）。均为Evaluate口径；完整Coordinator test33可比根2好/1差/30同，总转移+5.4%；默认Medium/组合的3个代表主要质量全部相同。因实际配置收益不足仍不启用；不把单成员结果当作实际交付路线。
 

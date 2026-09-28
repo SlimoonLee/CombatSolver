@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "TURN-SETUP-FIXED-PREFIX-STAMPEDE",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "TURN-SETUP-FIXED-PREFIX-STAMPEDE",
+  "clearRunDeck": true,
+  "relics": [
+    { "relicId": "GAMBLING_CHIP", "addWithoutObtainedEffects": true }
+  ],
+  "runCards": [
+    { "cardId": "STAMPEDE", "pile": "Deck", "count": 1 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Deck", "count": 4 },
+    { "cardId": "WOUND", "pile": "Deck", "count": 6 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Deck", "count": 1 }
+  ],
+  "fixedSearchBudget": true,
+  "searchBudgetOverrideMilliseconds": 20000,
+  "performancePresetForTest": "Low",
+  "searchBeamWidthForTest": 24,
+  "searchMaxExpandedNodesForTest": 6000,
+  "searchMaxDegreeOfParallelismForTest": 2,
+  "potionPolicyForTest": "Smart",
+  "enableNoGcRegionForTest": false,
+  "expectedInitialSetupChoiceCountAtLeast": 1,
+  "expectedInitialSetupChoiceSourceId": "GAMBLING_CHIP",
+  "expectedUnexpectedReplansAtMost": 0,
+  "stopAfterInitialSetupAssertion": true,
+  "timeoutSeconds": 120
+}

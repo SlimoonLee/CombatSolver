@@ -239,6 +239,8 @@ add_option deployment-fast-mode-for-test "" string optional_string "FollowGame|N
 add_option performance-preset-for-test "" string optional_string "Low|Medium|High|VeryHigh|Custom"
 add_option search-beam-width-for-test -1 int positive_int
 add_option search-max-expanded-nodes-for-test -1 int positive_int
+add_option beam-weight-term-for-test "" string optional_string "CurrentEnergy|PersistentBuffDelta|EnemyHp"
+add_option beam-weight-scale-for-test -1 number nonnegative_number
 add_option potion-policy-for-test "" string optional_string "Disabled|Smart|RequireAtLeastOne"
 add_option theft-policy-for-test "" string optional_string "PreserveResources|LetEscape"
 add_option enable-no-gc-region-for-test -1 int tri_bool
@@ -409,6 +411,16 @@ test_beam="${option_value[search-beam-width-for-test]}"
 test_nodes="${option_value[search-max-expanded-nodes-for-test]}"
 ((test_nodes == -1 || (test_nodes >= 100 && test_nodes <= 2147483647))) || \
     die "--search-max-expanded-nodes-for-test must be -1 or between 100 and 2147483647"
+beam_weight_term="${option_value[beam-weight-term-for-test]}"
+beam_weight_scale="${option_value[beam-weight-scale-for-test]}"
+if [[ -n "$beam_weight_term" && "$beam_weight_scale" == -1 ]] \
+    || [[ -z "$beam_weight_term" && "$beam_weight_scale" != -1 ]]; then
+    die "--beam-weight-term-for-test and --beam-weight-scale-for-test must be given together"
+fi
+if [[ -n "$beam_weight_term" ]]; then
+    awk -v scale="$beam_weight_scale" 'BEGIN { exit !(scale >= 0 && scale <= 2) }' || \
+        die "--beam-weight-scale-for-test must be between 0 and 2"
+fi
 for name in expected-initial-only-death-routes-found expected-initial-act-ending-boss \
     enable-no-gc-region-for-test enable-detailed-diagnostic-logs-for-test; do
     value="${option_value[$name]}"

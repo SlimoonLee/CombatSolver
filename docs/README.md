@@ -1,11 +1,15 @@
 # CombatSolver 文档导航
 
+- [策略重构与 PR 合并审计](refactoring/merge-audit-20260928.md)：本轮源码审查、修复、合并及验证边界。
+- [固定并行度优化试验](performance/fixed-dop-20260927.md)：当前采样、撤回的列表复制原型、长路线单次收尾回放及验证限制。
+
 - [更优世界线逐包策略记录](strategy/strategy-optimization-20260923.md)：逐包同根基线、人工对照和优化结果。
 - [策略优化 Part 1 交接](strategy/strategy-optimization-part1-handoff-20260927.md)：实验开关、已测作用、剩余包与继续排查口径。
 - [日志站更优世界线前 150 包](strategy/worldline-top150-20260926.md)：按站点战损下降值固定的处理顺序。
 
 - [常驻策略迭代会话](strategy/development-session.md)：跨包复用无头游戏、C# 策略脚本与参数热更新。
 
+- [搜索热路径分配](performance/search-hotpath-allocation-20260925.md)：Server GC 多预设与 17 个战斗根的直接交错对照、固定工作量等价及未采用实验。
 - [可选 ServerGC 启动配置](performance/server-gc-launch-profile-20260924.md)：仅本次进程生效的启动方式、保存设置边界与原生宿主验收。
 - [GC 完成链修复与优化筛选](performance/gc-completion-allocation-20260921.md)：替代 #116/#120 的窄修复、失败复现与重新实测取舍。
 - [增量历史计数](strategy/incremental-history-counters.md)：生命周期、测试构建与构键计时。
@@ -20,6 +24,8 @@
 
 | 要查什么 | 入口 |
 |---|---|
+| 0.47.2：跨回合路线、战前预报、模组兼容与内存显示 | [0.47.2 更新日志](releases/0.47.2-RELEASE_NOTES.md) |
+| 0.47.1 紧急回归修复 | [0.47.1 更新日志](releases/0.47.1-RELEASE_NOTES.md) |
 | 0.47.0 策略优化 Part 1 | [0.47.0 更新日志](releases/0.47.0-RELEASE_NOTES.md) |
 | 0.46.4 战损路线筛选与 Loadout 兼容的玩家说明 | [0.46.4 更新日志](releases/0.46.4-RELEASE_NOTES.md) |
 | 0.46.3 玩家更新内容 | [0.46.3 更新日志](releases/0.46.3-RELEASE_NOTES.md) |
@@ -87,6 +93,10 @@
 | 小改动优化文献、源码切口与独立分配探针 | [精简优化深入研究](performance/surgical-research-20260912.md) |
 | 遗物独立开关、目标范围、血量额度与早停 | [战斗末遗物计数策略](relic-counters.md) |
 | 组件职责、状态所有权和调用链 | [架构与职责地图](ARCHITECTURE.md) |
+| 当前求解与搜索策略的全链路深度分析 | [求解与搜索策略深度分析（2026-09-27 快照）](strategy/solver-search-strategy-analysis-20260927.md) |
+| P0–P6 策略与搜索重构的实际改动、证据及未完成项 | [策略与搜索重构实施总结](refactoring/strategy-search-refactor-summary-20260928.md) |
+| 后续策略优化方向、建议改动与架构不足 | [策略优化方向与架构不足分析](strategy/strategy-optimization-directions-20260927.md) |
+| 面向搜索层的大重构计划（目标架构、P0–P8、门禁与里程碑） | [策略与搜索大重构计划](refactoring/strategy-refactor-plan-20260927.md) |
 | 当前搜索、卡牌评分、保路剪枝与最终选路 | [搜索逻辑详解（2026-09-12 开发快照）](strategy/search-logic-explained-20260912.md) |
 | 当前 UI 重设计、按钮区整理与 Gemini 建议审计 | [UI 建议复核与重构方案](audits/ui-redesign-gemini-review-20260911.md) |
 | 本批未发布改动、版本演进与开发记录 | [开发笔记](DEVELOPMENT_NOTES.md) |

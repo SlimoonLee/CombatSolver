@@ -5,6 +5,357 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd -- "$script_dir/.." && pwd)"
 search_root="$repository_root/src/Search"
 violations=()
+for corpus_input in tools/StrategyCorpus/run.py tools/StrategyCorpus/compare.py coverage/strategy-refactor-p0/corpus.json; do
+    [[ -f "$repository_root/$corpus_input" ]] || violations+=("Strategy corpus input missing: $corpus_input")
+done
+for quality_input in src/Search/RouteQuality.cs src/Search/RouteQualityPolicy.cs; do
+    [[ -f "$repository_root/$quality_input" ]] || violations+=("Route quality model missing: $quality_input")
+done
+[[ -f "$repository_root/src/Search/PotionValuationRegistry.cs" ]] || violations+=("Potion valuation registry missing")
+if ! rg -Fq 'PotionValuationRegistry.Default' "$repository_root/src/Search/PotionUsePolicy.cs" ||
+   rg -Fq 'HighValuePotionIds' "$repository_root/src/Search/PotionUsePolicy.cs" ||
+   rg -Fq 'ElevatedValuePotionIds' "$repository_root/src/Search/PotionUsePolicy.cs"; then
+    violations+=("Potion valuation classifications remain outside the registry")
+fi
+[[ -f "$repository_root/src/Search/OpeningActionRegistry.cs" ]] || violations+=("Opening action registry missing")
+if ! rg -Fq 'OpeningActionRegistry.Default' "$repository_root/src/Search/CombatBeamSolver.Expansion.Opening.cs" ||
+   rg -q '"(WHITE_NOISE|NIGHTMARE|DUPLICATOR)"' "$repository_root/src/Search/CombatBeamSolver.Expansion.Opening.cs"; then
+    violations+=("Opening action IDs remain outside the registry")
+fi
+if [[ ! -f "$repository_root/src/Search/TargetPlanRegistry.cs" ]] ||
+   ! rg -Fq 'TargetPlanRegistry.Default' "$repository_root/src/Search/CombatBeamSolver.Expansion.Opening.cs"; then
+    violations+=("Opening target plans are not registered")
+fi
+strategy_id_literal_count=$(rg -o --no-filename '"[A-Z][A-Z0-9_]{4,}"' "$repository_root/src/Search" \
+    --glob '*.cs' \
+    --glob '!PotionValuationRegistry.cs' \
+    --glob '!OpeningActionRegistry.cs' \
+    --glob '!TargetPlanRegistry.cs' | wc -l)
+if (( strategy_id_literal_count > 645 )); then
+    violations+=("Search strategy ID literals increased: $strategy_id_literal_count > 645")
+fi
+[[ -f "$repository_root/src/Search/CombatBeamSolver.ExpansionPlan.cs" ]] || violations+=("Shared expansion plan missing")
+if ! rg -Fq 'cardJobs.PrepareSerialCards(this,' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'EnumeratePlannedCardActions(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   ! rg -Fq 'cardJobs.PrepareSerialPotions(this)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'EnumeratePlannedPotionActions(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Serial and parallel card/potion paths do not share the expansion plan")
+fi
+if ! rg -Fq 'cardJobs.RunSerialCardAction(this, cardJob)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'CreatePlannedPotionChild(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'CreatePlannedCardChild(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   ! rg -Fq 'CreatePlannedPotionChild(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Card and potion children must use the shared construction path")
+fi
+if ! rg -Fq 'cardJobs.RunSerialCardAction(this, cardJob)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'TryResolvePlannedCardChoices(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Serial and parallel paths must share ordinary card choice dispatch")
+fi
+if ! rg -Fq 'TryAdmitExpansionParent(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'TryAdmitExpansionParent(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Serial and parallel paths duplicate parent expansion admission")
+fi
+if ! rg -Fq 'ProcessExpandedCardCandidate(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'ProcessExpandedCardCandidate(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   rg -Fq 'AddNonDominatedParallelCandidate(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Serial and parallel card admission remains duplicated")
+fi
+if ! rg -Fq 'TryAdmitPlannedPotionChild(' "$repository_root/src/Search/CombatBeamSolver.ExpansionPlan.cs" ||
+   ! rg -Fq 'TryAdmitPlannedPotionChild(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'TryAdmitPlannedPotionChild(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Serial and parallel potion admission remains duplicated")
+fi
+if ! rg -Fq 'AdmitPlannedEndTurnChildren(' "$repository_root/src/Search/CombatBeamSolver.ExpansionPlan.cs" ||
+   ! rg -Fq 'AdmitPlannedEndTurnChildren(cycleExitBatch)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'AdmitPlannedEndTurnChildren(batch)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'AdmitPlannedEndTurnChildren(batch)' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("End-turn candidate admission has multiple owners")
+fi
+if [[ ! -f "$repository_root/src/Search/CombatBeamSolver.ExpansionExecutor.cs" ]] ||
+   ! rg -Fq 'private interface IExpansionExecutor' "$repository_root/src/Search/CombatBeamSolver.ExpansionExecutor.cs" ||
+   ! rg -Fq 'private sealed class SerialExpansionExecutor' "$repository_root/src/Search/CombatBeamSolver.ExpansionExecutor.cs" ||
+   ! rg -Fq 'ParallelExpansionExecutor : IExpansionExecutor' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   ! rg -Fq 'serialExpansionExecutor.Execute(' "$repository_root/src/Search/CombatBeamSolver.Phases.cs" ||
+   ! rg -Fq 'parallelExpansionExecutor!.Execute(' "$repository_root/src/Search/CombatBeamSolver.Phases.cs"; then
+    violations+=("Serial and parallel expansion do not share the executor contract")
+fi
+if ! rg -Uq '    }\r?\n\s*\r?\n    private readonly record struct ChoiceJob\(' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -q '^    private sealed class AdmittedParent\(' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'private sealed class AdmittedJobScheduler(' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'public void RunSerialCardAction(CombatBeamSolver solver, AdmittedExpansionJob job)' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'public void RunSerialChoiceJob(CombatBeamSolver solver, AdmittedExpansionJob job)' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'public IEnumerable<SearchNode> RunSerialPotionJob(' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'public IEnumerable<SearchNode> RunSerialEndTurnJob(' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'scheduler.NextJob(laneIndex)' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   rg -Fq 'AdmittedExpansionJob? NextJob(int laneIndex)' "$repository_root/src/Search/CombatBeamSolver.AdmittedExpansion.cs" ||
+   ! rg -Fq 'scheduler.NextJob(0, SerialJobPhase.Prepare)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'scheduler.NextJob(0, SerialJobPhase.Card)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'scheduler.NextJob(0, SerialJobPhase.Potion)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'scheduler.NextJob(0, SerialJobPhase.Tail)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs"; then
+    violations+=("Admitted parent job state must belong to CombatBeamSolver, outside the parallel executor")
+fi
+if ! rg -Fq 'private sealed class PreparedPotionChoiceWork(' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   ! rg -Fq 'work.Resolve(this, node, baseAction)' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs" ||
+   ! rg -Fq 'work.Resolve(this, node, planned.Action)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs"; then
+    violations+=("Serial and parallel potion choice replay must use the same prepared work owner")
+fi
+if ! rg -Fq 'IEnumerable<PreparedCardAction> EnumeratePlannedCardActions(' "$repository_root/src/Search/CombatBeamSolver.ExpansionPlan.cs" ||
+   rg -Fq 'PredictedCard? sourceCard' "$repository_root/src/Search/CombatBeamSolver.ExpansionPlan.cs" ||
+   ! rg -Fq 'cardJobs.RunSerialCardAction(this, cardJob)' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   rg -Fq 'TryResolvePlannedCardChoices(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs" ||
+   ! rg -Fq 'TryResolvePlannedCardChoices(node, action, probeSnapshot,' "$repository_root/src/Search/CombatBeamSolver.ParallelExpansion.cs"; then
+    violations+=("Card choice replay and requirements must use the shared planned action path")
+fi
+if ! rg -Fq 'DirectSearchPurpose' "$repository_root/src/Search/SearchRequestWorkTotals.cs" ||
+   ! rg -Fq 'DirectSearchPurpose? directSearchPurpose' "$repository_root/src/Search/CombatBeamSolver.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.RefinementBeam' "$repository_root/src/Search/CombatSearchCoordinator.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.PrimaryBeam' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Primary and refinement Beam work attribution missing")
+fi
+if ! rg -Fq 'DirectSearchPurpose.PotionFreeAudit' "$repository_root/src/Search/CombatSearchCoordinator.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.PotionFreeAudit' "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.RequiredPotionAudit' "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.SmartPotionGradient' "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.TurnBoundaryDiscovery' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.EarlyTurnScout' "$repository_root/src/Search/CombatSearchCoordinator.EarlyTurnExploration.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.NoveltyExploration' "$repository_root/src/Search/CombatSearchCoordinator.NoveltyPortfolio.cs" ||
+   ! rg -Fq 'DirectSearchPurpose.AdaptiveNoveltyRefinement' "$repository_root/src/Search/CombatSearchCoordinator.NoveltyPortfolio.cs"; then
+    violations+=("Direct search work attribution missing")
+fi
+for plan_source in src/Search/PlanCommitment.cs src/Search/PlanMechanismRegistry.cs src/Search/CombatSearchCoordinator.PlanSearch.cs; do
+    [[ -f "$repository_root/$plan_source" ]] || violations+=("Plan search boundary missing: $plan_source")
+done
+if ! rg -Fq 'context.Budget.RequestWindow(' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'ContinuationPurpose.PlanCommitment' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'IsBetterPotionPolicyResult(' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'TryRunPlanMember(' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs"; then
+    violations+=("Plan search bypasses shared budget, continuation or final quality policy")
+fi
+if ! rg -Fq 'PlanMechanismRegistry.Default.DeferredCopies' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'BuildOpeningCopyActionsAfterPrefix(' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   rg -Fq 'PlanChoiceEffect.Nightmare' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   rg -Fq 'OpeningCandidatePurpose.NightmareCopyCard' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'HasPlayableChoiceEffect(' "$repository_root/src/Search/CombatBeamSolver.Expansion.Opening.cs"; then
+    violations+=("Plan copy discovery must follow registered choice semantics")
+fi
+if ! rg -Fq 'ImmutableArray<DeferredCopyPlanRule>' "$repository_root/src/Search/PlanMechanismRegistry.cs" ||
+   ! rg -Fq 'PlanChoiceEffect.Nightmare' "$repository_root/src/Search/PlanMechanismRegistry.cs"; then
+    violations+=("Deferred copy plan rules must be internally immutable and registered")
+fi
+if ! rg -Fq 'PlanPayoffEvidenceKind' "$repository_root/src/Search/PlanCommitment.cs" ||
+   ! rg -Fq 'FreePotionUsed' "$repository_root/src/Search/PlanCommitment.cs" ||
+   ! rg -Fq 'RegisteredPowerBenefit' "$repository_root/src/Search/PlanCommitment.cs" ||
+   rg -Fq 'PayoffCardId' "$repository_root/src/Search/PlanCommitment.cs"; then
+    violations+=("Plan payoff evidence must be typed and shared across mechanisms")
+fi
+if ! rg -Fq 'PlanCommitmentKind.PotionChain' "$repository_root/src/Search/CombatSearchCoordinator.PotionChain.cs" ||
+   ! rg -Fq 'PlanPayoffEvidenceKind.FreePotionUsed' "$repository_root/src/Search/CombatSearchCoordinator.PotionChain.cs" ||
+   ! rg -Fq 'Commitment = plan' "$repository_root/src/Search/CombatSearchCoordinator.PotionChain.cs"; then
+    violations+=("Generated free-potion chain must carry plan payoff evidence")
+fi
+if ! rg -Fq 'RunDeferredPowerPlanSearchPass(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'EarlyTurnScoutDepth = 1' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs" ||
+   ! rg -Fq 'PlanCommitmentKind.CrossTurnBenefit' "$repository_root/src/Search/CombatSearchCoordinator.PlanSearch.cs"; then
+    violations+=("Deferred power plan must use the ordered post-search continuation")
+fi
+if ! rg -Fq 'AdmitPlanCommitmentRepresentatives(' "$repository_root/src/Search/CombatBeamSolver.BeamRetentionPolicy.cs" ||
+   ! rg -Fq '_planCommitment' "$repository_root/src/Search/CombatBeamSolver.BeamRetentionPolicy.cs"; then
+    violations+=("Plan commitment has no protected retention representatives")
+fi
+if [[ ! -f "$repository_root/src/Search/PlanHorizonPolicy.cs" ]] ||
+   ! rg -Fq 'PlanHorizonPolicy.ShouldExtend(' "$repository_root/src/Search/CombatBeamSolver.Expansion.cs"; then
+    violations+=("Realized plans have no bounded horizon extension")
+fi
+[[ -f "$repository_root/src/Search/SearchBudgetLedger.cs" ]] || violations+=("Search budget ledger missing")
+if ! rg -Fq 'internal readonly record struct SearchBudgetWindow' "$repository_root/src/Search/SearchBudgetLedger.cs" ||
+   ! rg -Fq 'internal SearchBudgetWindow RequestWindow(' "$repository_root/src/Search/SearchBudgetLedger.cs"; then
+    violations+=("Request budget window missing")
+fi
+[[ -f "$repository_root/src/Search/SearchPassContext.cs" ]] || violations+=("Search pass context missing")
+[[ -f "$repository_root/src/Search/SearchPassResult.cs" ]] || violations+=("Search pass result missing")
+for pass_field in 'RouteQuality? Quality' 'SearchRequestWorkSnapshot WorkTotals' \
+    'SolverResultScope PassScope' 'SearchBoundaryReason PassBoundary'; do
+    if ! rg -Fq "$pass_field" "$repository_root/src/Search/SearchPassResult.cs"; then
+        violations+=("Search pass result contract missing: $pass_field")
+    fi
+done
+[[ -f "$repository_root/src/Search/SearchRequestPipeline.cs" ]] || violations+=("Search request pipeline missing")
+[[ -f "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ]] || violations+=("Post-search passes missing")
+[[ -f "$repository_root/src/Search/CombatSearchCoordinator.BeamPortfolio.cs" ]] || violations+=("Beam portfolio owner missing")
+[[ -f "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs" ]] || violations+=("Supplemental audit owner missing")
+for continuation_input in src/Search/FrontierContinuationScheduler.cs src/Search/OpeningPotionPairContinuationSource.cs src/Search/EarlierCopyDelayedDamageContinuationSource.cs src/Search/OpeningNoCostContinuationSource.cs src/Search/TurnEndChoiceContinuationSource.cs src/Search/SinglePrefixContinuationSource.cs src/Search/TurnBoundaryContinuationSource.cs; do
+    [[ -f "$repository_root/$continuation_input" ]] || violations+=("Frontier continuation component missing: $continuation_input")
+done
+if [[ $(wc -l < "$repository_root/src/Search/CombatSearchCoordinator.cs") -gt 1200 ]]; then
+    violations+=("Search coordinator main file exceeds the P3 1200-line ownership limit")
+fi
+if ! rg -Fq 'SearchBudgetLedger ledger = new(' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Search coordinator does not own a request budget ledger")
+fi
+if rg -Fq 'policy.RequestWorkTotals?.Snapshot().ExpandedNodes ?? 0L' "$repository_root/src/Search/CombatSearchCoordinator.cs" ||
+   rg -Fq -- '- (int)passClock.ElapsedMilliseconds' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Primary pass prefix budgets bypass the request budget ledger")
+fi
+if rg -Fq 'MaxExpandedNodes = (int)Math.Min(' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Primary pass member budget bypasses the pass budget window")
+fi
+for purpose in EarlyDiscardBeforeGeneration OpeningTargetVariant \
+    OpeningTargetPowerVariant OpeningTargetPowerDefensiveVariant \
+    DeferredOpeningPower FreeAttackHandSetup; do
+    if ! rg -Fq "ContinuationPurpose.$purpose" "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+        violations+=("Primary pass fixed-prefix request missing: $purpose")
+    fi
+done
+for purpose in OpeningResourceDefense PotionResourcePosterior \
+    PotionPowerPosterior PotionPowerDefensivePosterior; do
+    if ! rg -Fq "ContinuationPurpose.$purpose" "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs"; then
+        violations+=("Opening audit fixed-prefix request missing: $purpose")
+    fi
+done
+for purpose in RequiredOpeningPotion RequiredPotionPair \
+    RequiredPotionPairDefensive; do
+    if ! rg -Fq "ContinuationPurpose.$purpose" "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs"; then
+        violations+=("Required potion audit fixed-prefix request missing: $purpose")
+    fi
+done
+if rg -Fq 'fixedPrefixActions:' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Search coordinator constructs a fixed-prefix solver outside the scheduler")
+fi
+if rg -Fq 'SearchRequestWorkTotals requestWorkTotals = new()' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Search coordinator creates request work totals outside the budget ledger")
+fi
+if ! rg -Fq 'RunSupplementalAudits(auditContext,' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Supplemental audits do not consume the search pass context")
+fi
+if ! rg -Fq 'SearchPassResult RunSearchPass(' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Search pass does not return its termination state")
+fi
+if ! rg -Fq 'SearchPassResult RunSearchPass(SearchPassContext passContext)' "$repository_root/src/Search/CombatSearchCoordinator.cs" ||
+   ! rg -Fq 'new SearchRequestPipeline(requestContext, RunSearchPass, postSearch).Run()' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Primary search pass does not consume the search pass context")
+fi
+if ! rg -Fq 'RunEarlyPotionPairRescue(context, selected)' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'RunEarlyPotionPairRescue(SearchPassContext context, SolverResult selected)' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   rg -Fq 'EARLY_POTION_PAIR prefix=' "$repository_root/src/Search/CombatSearchCoordinator.cs"; then
+    violations+=("Early potion pair rescue is not a post-search pass")
+fi
+if ! rg -Fq 'new FrontierContinuationScheduler(context).Run(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'RequestWindow(' "$repository_root/src/Search/FrontierContinuationScheduler.cs" ||
+   ! rg -Fq 'fixedPrefixActions: request.Prefix' "$repository_root/src/Search/FrontierContinuationScheduler.cs"; then
+    violations+=("Early potion pair rescue bypasses the frontier continuation scheduler")
+fi
+if ! rg -Fq 'SolverResult Dispatch(ContinuationSearchRequest request)' "$repository_root/src/Search/FrontierContinuationScheduler.cs" ||
+   ! rg -Fq 'result = Dispatch(request);' "$repository_root/src/Search/FrontierContinuationScheduler.cs" ||
+   ! rg -Fq 'CombatBeamSolver CreateSolver(ContinuationSearchRequest request)' "$repository_root/src/Search/FrontierContinuationScheduler.cs"; then
+    violations+=("Frontier continuation request does not own solver construction")
+fi
+if ! rg -Fq 'new EarlierCopyDelayedDamageContinuationSource(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'context, selected.BestNode.Actions)' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Earlier copy potion rescue bypasses the frontier continuation scheduler")
+fi
+if ! rg -Fq 'OpeningNoCostContinuationSource source = new(context);' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'source.DeduplicatePrefixes' "$repository_root/src/Search/FrontierContinuationScheduler.cs"; then
+    violations+=("No-cost opening rescue bypasses source-specific continuation identity")
+fi
+if ! rg -Fq 'new TurnEndChoiceContinuationSource(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'new SinglePrefixContinuationSource(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Turn-end choice posterior bypasses the frontier continuation scheduler")
+fi
+if ! rg -Fq 'new TurnBoundaryContinuationSource(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'optionalPotionDiagnostic' "$repository_root/src/Search/FrontierContinuationScheduler.cs"; then
+    violations+=("Turn-boundary rescue bypasses the frontier continuation scheduler")
+fi
+if rg -Fq 'fixedPrefixActions: combinedPrefix,' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   rg -Fq 'fixedPrefixActions: [.. nextTurnPrefix, nextAttack,' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Turn-boundary follow-up bypasses fixed-prefix request dispatch")
+fi
+if rg -Fq 'fixedPrefixActions: focusedOpening,' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   rg -Fq 'fixedPrefixActions: reordered,' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Forced potion opening bypasses fixed-prefix request dispatch")
+fi
+if rg -Fq 'fixedPrefixActions:' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Post-search pass constructs a fixed-prefix solver outside the scheduler")
+fi
+if ! rg -Fq 'SearchBudgetWindow discoveryWindow = ledger.RequestWindow(policy.Profile);' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'SearchBudgetWindow continuationWindow = ledger.RequestWindow(policy.Profile);' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+   ! rg -Fq 'SearchBudgetWindow reorderedWindow = ledger.RequestWindow(policy.Profile);' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Forced potion opening rescue bypasses the request budget window")
+fi
+if rg -Fq 'MaxExpandedNodes = (int)Math.Min(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Post-search member budget bypasses the request budget window")
+fi
+for pass in RunForcedPotionOpeningRescue RunTurnBoundaryRescue \
+    RunZeroCostOpeningRescue RunMidCombatRefinement \
+    RunTurnEndChoicePosterior RunEarlierCopyDelayedDamage; do
+    if ! rg -Fq "$pass(context, selected" "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs" ||
+       ! rg -Fq "SolverResult $pass(" "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+        violations+=("Post-search pass ownership missing: $pass")
+    fi
+done
+if ! rg -Fq 'RunEarlyTurnExploration(context, selected)' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Early-turn exploration bypasses the search pass context")
+fi
+if ! rg -Fq '_postSearch(' "$repository_root/src/Search/SearchRequestPipeline.cs" ||
+   ! rg -Fq 'RunPostSearchPasses(' "$repository_root/src/Search/CombatSearchCoordinator.PostSearch.cs"; then
+    violations+=("Post-search passes bypass the search request pipeline")
+fi
+if ! rg -Fq 'CombatSearchCoordinator.EscalateSearchWhenNoVictory(' "$repository_root/src/Search/SearchRequestPipeline.cs" ||
+   ! rg -Fq '_context,' "$repository_root/src/Search/SearchRequestPipeline.cs"; then
+    violations+=("No-victory escalation does not consume the search request context")
+fi
+if ! rg -Fq 'internal static SearchPassResult EscalateSearchWhenNoVictory(' "$repository_root/src/Search/CombatSearchCoordinator.FailureRecovery.cs"; then
+    violations+=("No-victory escalation does not return search pass state")
+fi
+if ! rg -Fq 'Func<SearchPassContext, SearchPassResult> runPass' "$repository_root/src/Search/CombatSearchCoordinator.FailureRecovery.cs"; then
+    violations+=("No-victory escalation does not dispatch a search pass context")
+fi
+if ! rg -Fq 'Quality = selectedPass.Quality' "$repository_root/src/Search/CombatSearchCoordinator.FailureRecovery.cs"; then
+    violations+=("No-victory escalation does not retain the selected route quality")
+fi
+if ! rg -Fq 'RunOpeningNightmarePortfolio(' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs" ||
+   ! rg -Fq 'RunOpeningPowerRoutePortfolio(' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs" ||
+   rg -Fq 'policy.RequestWorkTotals?.Snapshot()' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs"; then
+    violations+=("Opening route passes bypass the search pass budget ledger")
+fi
+if ! rg -Fq 'context.Budget.ProfileWindow(profile)' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs" ||
+   rg -Fq 'Math.Min(30_000L, remainingNodes)' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs"; then
+    violations+=("Nightmare opening member bypasses the profile budget window")
+fi
+if rg -Fq 'fixedPrefixActions:' "$repository_root/src/Search/CombatSearchCoordinator.PowerRoutes.cs"; then
+    violations+=("Opening power routes construct a fixed-prefix solver outside the scheduler")
+fi
+if rg -Fq 'fixedPrefixActions:' "$repository_root/src/Search/CombatSearchCoordinator.EarlyTurnExploration.cs" ||
+   ! rg -Fq 'ContinuationPurpose.EarlyTurnContinuation' "$repository_root/src/Search/CombatSearchCoordinator.EarlyTurnExploration.cs"; then
+    violations+=("Early-turn experiment bypasses fixed-prefix request dispatch")
+fi
+if ! rg -Fq 'RunNoveltyPortfolioPass(' "$repository_root/src/Search/CombatSearchCoordinator.NoveltyPortfolio.cs" ||
+   ! rg -Fq 'SearchPassContext context,' "$repository_root/src/Search/CombatSearchCoordinator.NoveltyPortfolio.cs" ||
+   rg -Fq 'policy.RequestWorkTotals' "$repository_root/src/Search/CombatSearchCoordinator.NoveltyPortfolio.cs"; then
+    violations+=("Novelty portfolio bypasses the search pass context or budget ledger")
+fi
+if ! rg -Fq 'RunBeamWidthPortfolioPass(' "$repository_root/src/Search/CombatSearchCoordinator.cs" ||
+   ! rg -Fq 'SearchRequestWorkTotals totals = context.Budget.WorkTotals;' "$repository_root/src/Search/CombatSearchCoordinator.BeamPortfolio.cs"; then
+    violations+=("Beam portfolio bypasses the search pass budget ledger")
+fi
+for audit in AuditRequiredPotionUse AuditSmartPotionUse AuditOpeningPowerUse; do
+    if ! rg -Uq "private static SolverResult ${audit}\\(\\s*SearchPassContext context" "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs"; then
+        violations+=("Supplemental audit bypasses the search pass context: $audit")
+    fi
+done
+if rg -Fq 'policy.RequestWorkTotals?.Snapshot()' "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs" ||
+   rg -Fq 'policy.RequestWorkTotals?.RecordCoordinatorOverhead(' "$repository_root/src/Search/CombatSearchCoordinator.Audits.cs"; then
+    violations+=("Potion gradient work accounting bypasses the request budget ledger")
+fi
+for quality_contract in \
+    'src/Search/SolverInterimResultOrdering.cs|RouteQualityProjection.Interim' \
+    'src/Search/CombatSearchCoordinator.cs|RouteQualityProjection.PotionPolicy' \
+    'src/Search/CombatBeamSolver.FinalPlanOrdering.cs|candidate.Quality.StrategicHpDeficit' \
+    'src/Search/CombatBeamSolver.BeamRetentionPolicy.Ranking.cs|RouteQualityProjection.Primary' \
+    'src/Search/CombatBeamSolver.Retention.cs|RouteQualityProjection.RetentionCost'; do
+    relative="${quality_contract%%|*}"
+    marker="${quality_contract#*|}"
+    rg -Fq "$marker" "$repository_root/$relative" || violations+=("Route quality projection missing: $relative")
+done
 
 usage() {
     cat <<'EOF'
@@ -154,6 +505,12 @@ forbid_fixed "$search_root/CombatBeamSolver.Phases.cs" 'CaptureContinuation(node
     'only the selected route may build continuation stamps'
 require_fixed "$search_root/CombatBeamSolver.Terminal.cs" 'ContinuationStamp.CapturePredicted(' \
     'Terminal must build the selected route continuation stamp'
+for required in 'PrepareContinuationCapture(best)' 'continuationCapture: continuationCapture' 'continuationCapture.Complete()'; do
+    require_fixed "$search_root/CombatBeamSolver.Phases.cs" "$required" \
+        'selected route must capture continuations in its annotation replay'
+done
+forbid_fixed "$search_root/CombatBeamSolver.Terminal.cs" 'Replay(node.Actions' \
+    'continuation capture must not replay every selected turn prefix'
 
 for relative_path in \
     src/Search/CombatBeamSolver.Expansion.cs \
@@ -451,6 +808,8 @@ while IFS=$'\t' read -r relative_path text; do
     require_fixed "$repository_root/$relative_path" "$text" 'missing pre-combat isolation boundary'
 done <<'EOF'
 src/Api/PreCombatForecastApi.cs	public static class PreCombatForecastApi
+src/Runtime/Entry.cs	public static bool IsPreCombatWorker
+src/Runtime/SolverDispatcher.cs	if (!Entry.IsPreCombatWorker)
 src/Api/PreCombatLiveStateSnapshot.cs	RunManager.Instance.ToSave(null)
 src/Api/PreCombatRunSerialization.cs	point["can_modify"] = false
 src/Api/PreCombatRunSerialization.cs	eventChoice["variables"] is JsonObject { Count: 0 }
@@ -606,6 +965,8 @@ expected_beam_files=(
     CombatBeamSolver.Expansion.Candidates.cs
     CombatBeamSolver.Expansion.Choices.cs
     CombatBeamSolver.Expansion.Opening.cs
+    CombatBeamSolver.ExpansionExecutor.cs
+    CombatBeamSolver.ExpansionPlan.cs
     CombatBeamSolver.Expansion.Replay.cs
     CombatBeamSolver.FinalPlanOrdering.cs
     CombatBeamSolver.Models.cs
@@ -664,7 +1025,7 @@ CombatBeamSolver.BeamRetentionPolicy.cs	ReturnRoutingChoiceScratch(scratch);
 CombatBeamSolver.Transpositions.cs	private readonly record struct TranspositionLabel(
 CombatBeamSolver.Models.cs	private sealed class SearchRunContext(
 CombatBeamSolver.Models.cs	private readonly record struct SearchFeatures(
-CombatBeamSolver.ParallelExpansion.cs	private sealed partial class ParallelExpansionExecutor : IDisposable
+CombatBeamSolver.ParallelExpansion.cs	private sealed partial class ParallelExpansionExecutor : IExpansionExecutor, IDisposable
 CombatBeamSolver.ParallelExpansion.cs	public ExpansionWorkerOutcome[] Evaluate(
 CombatBeamSolver.ParallelExpansion.cs	public int MaximumQueuedParents => SearchWaveMemoryPolicy.MaximumQueuedParents(DegreeOfParallelism);
 CombatBeamSolver.ParallelExpansion.cs	List<ExpansionLane> lanes = new(DegreeOfParallelism);
@@ -806,7 +1167,7 @@ require_fixed "$search_root/PowerCommitmentPortfolioGate.cs" \
     'missing power commitment portfolio gate'
 for power_route_rule in \
     'private static SolverResult RunOpeningPowerRoutePortfolio(' \
-    'fixedPrefixActions: prefix' \
+    'ContinuationPurpose.OpeningPowerRouteMember' \
     'PowerRoutePortfolioMemberReport'; do
     require_fixed "$search_root/CombatSearchCoordinator.PowerRoutes.cs" \
         "$power_route_rule" \
@@ -1321,6 +1682,16 @@ require_fixed "$repository_root/src/Search/CombatBeamSolver.Models.cs" 'Transpos
 require_fixed "$repository_root/src/Search/SearchPolicySnapshot.cs" 'DefaultTranspositionEntryLimit = 1_000_000' 'production transposition entry limit changed'
 
 # Contextual estimates may influence intermediate ordering only; loading stays outside workers.
+require_fixed "$repository_root/tools/ContextualOrdering/first_loss.py" "key = (o['solverId'], o['boundaryId'])" 'search loss query must group by solver and boundary identity'
+require_fixed "$search_root/FrontierContinuationScheduler.cs" 'attributionPurpose: request.Purpose' 'missing request work attribution boundary'
+require_fixed "$search_root/SearchRequestWorkTotals.cs" 'AttributionSnapshot()' 'missing request work attribution boundary'
+require_fixed "$repository_root/tools/CheckpointTool/StrategySessionRunner.cs" 'timeout-progress.json' 'strategy session timeout must preserve its last progress snapshot'
+require_fixed "$repository_root/src/Testing/DevelopmentMonitorPublisher.cs" '["memberMaxNodes"] = progress?.MaxNodes' 'timeout progress must include the active member node limit'
+require_fixed "$repository_root/src/Search/CombatSearchCoordinator.PotionChain.cs" 'FrontierContinuationScheduler' 'missing generated potion chain boundary'
+require_fixed "$repository_root/src/Search/CombatBeamSolver.Expansion.Opening.cs" 'BuildFreeEntropicPotionActionsAfterPrefix' 'missing generated potion chain boundary'
+require_fixed "$repository_root/src/Search/SimulatedCombatState.Potions.cs" 'IsFreeEntropicPotionAtSlot' 'missing generated potion chain boundary'
+require_fixed "$repository_root/src/Testing/UnattendedTestRunner.ProtocolHost.cs" 'new BeamWeightPerturbation(' 'missing frozen Beam weight probe boundary'
+require_fixed "$repository_root/src/Runtime/SolverController.cs" 'UnattendedTestRunner.BeamWeightPerturbationOverride' 'missing frozen Beam weight probe boundary'
 require_fixed "$search_root/ContextualRankingModel.cs" 'stackalloc double[FeatureCount]' 'contextual ranking must keep its feature buffer local'
 require_fixed "$search_root/ContextualRankingModel.cs" 'ModuleVersionId' 'contextual model must validate assembly identity'
 for token in 'File.' 'SolverSettings.Current' 'SolverController' 'ComparePrimaryQuality'; do

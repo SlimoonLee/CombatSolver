@@ -127,6 +127,9 @@ M2 和 `--blind-known-top 0`，不将开局堆顶知识传播到后续动作。
   若使用 `run-unattended-test` 的 Godot 无头路径，仍须遵循其独立实例与清理规范。
 
 9 场原生战斗、奖励选择与人工历史差距见[本轮实测](strategy/blind-native-rollout-20260928.md)。
+启用 `OFFLINE_HARNESS_INFUSED_CORE_CHECKS=1` 并使用 `--character DEFECT --milestone M1` 可运行注能核心的生产 Hook 诊断：从空球队列检查首回合生成、后续回合不重复、参与者条件、4/9 数值及 Fork 隔离，结果写入 `infused-core-checks.json`。该入口只修改宿主内的测试战斗；它不经过原生工具箱页面，不能替代 `coverage/unattended/initial-toolbox-infused-core.json` 的原生准备状态验收。
+
+启用 `OFFLINE_HARNESS_FIXED_PREFIX_CONTINUATIONS=1` 并以 `coverage/unattended/generic-cross-turn-hidden-buffer-positive-v0111.json` 为 `--request`，使用 `--dop 1 --search-mode Evaluate` 且关闭NoGC／增量验证，可运行4／8／17回合完整固定前缀基准。每根预热一次、测量三次生产 `Solve`，计时外用独立前缀重放对账完整续用戳，输出 `fixed-prefix-continuations.json`。它只度量人工长路线的前缀建立与收尾，不代表普通搜索或原生正确性；用 `OFFLINE_HARNESS_COMBATSOLVER_DLL` 交错切换基线／候选，完整比较根、政策和 `annotatedResult`，见[本轮证据](performance/fixed-dop-20260927.md)。
 
 ## 批量用法
 
@@ -173,6 +176,8 @@ plan 每项的字段：`label`（必填，简单目录名）、`request`（必�
 通道与组合成员）加总**后的值，所以同一个根同样的宽度，`Coordinator` 的 `totalExpanded` 会明显大于
 `Evaluate`。要量「一个宽度值到底搜了多少」用 `Evaluate`；要量「玩家实际会等多久、实际选哪条路线」
 用 `Coordinator`。
+
+`solverMetrics.searchWorkAttributions` 另列经前沿调度器派发的各 `ContinuationPurpose` 工作量、`UnattributedDirect`（尚未细分的主搜和审计）及 `CoordinatorOverhead`。这是同一请求账本的诊断分解；直接成员尚未全部标记，不能由 `UnattributedDirect` 推断单一瓶颈。超时未产结果时使用常驻会话保存的 `timeout-progress.json`，旧包缺该文件就没有可追溯的末段工作量。
 
 **固定预算口径。** 宿主总是以 `fixedSearchBudget=true` 起一段离线会话
 （`UnattendedTestRunner.BeginOfflineSession`），`--budget-ms` 落在 `searchBudgetOverrideMilliseconds`

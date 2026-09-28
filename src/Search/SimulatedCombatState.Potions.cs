@@ -35,6 +35,11 @@ internal sealed partial class SimulatedCombatState
     public bool IsPotionAvailable(Player player, int slot)
         => GetPotionAtSlot(player, slot) != null;
 
+    internal bool IsFreeEntropicPotionAtSlot(Player player, int slot)
+        => GetPotionAtSlot(player, slot) != null
+            && _freeEntropicPotions?.TryGetValue((player, slot), out bool free) == true
+            && free;
+
     public bool HasOpenPotionSlot(Player player)
     {
         for (int slot = 0; slot < PotionSlotCount(player); slot++)

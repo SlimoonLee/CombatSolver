@@ -6210,10 +6210,10 @@
     "testId": "RELIC-HOOKS-BATCH-054"
   },
   "Relic|MegaCrit.Sts2.Core.Models.Relics.InfusedCore|MegaCrit.Sts2.Core.Models.AbstractModel.AfterSideTurnStart(MegaCrit.Sts2.Core.Combat.CombatSide,System.Collections.Generic.IReadOnlyList<MegaCrit.Sts2.Core.Entities.Creatures.Creature>,MegaCrit.Sts2.Core.Combat.ICombatState)": {
-    "status": "NativeRuntimeState",
-    "source": "Game 0.111.0 InfusedCore; combat-start snapshot boundary",
-    "notes": "The native three-Lightning first-turn trigger is already represented in the first searchable orb queue, and its turn guard prevents repetition in predicted future turns.",
-    "testId": "RELIC-HOOKS-BATCH-054"
+    "status": "SolverCompensation",
+    "source": "src/Search/SimulatedCombatState.RelicTurnStart.cs",
+    "notes": "Channels three Lightning orbs for the participating owner on the first turn, including roots captured before Toolbox setup choices. Later predicted turns do not repeat the trigger. Offline hook diagnostics cover empty queues and fork isolation; native initial-setup acceptance remains unverified.",
+    "testId": "INFUSED-CORE-INITIAL-SETUP-20260927"
   },
   "Relic|MegaCrit.Sts2.Core.Models.Relics.InfusedCore|MegaCrit.Sts2.Core.Models.AbstractModel.ModifyOrbValue(MegaCrit.Sts2.Core.Models.OrbModel,System.Decimal)": {
     "status": "EngineInferred",

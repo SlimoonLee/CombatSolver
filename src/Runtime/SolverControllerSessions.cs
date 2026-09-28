@@ -37,45 +37,43 @@ internal readonly record struct SearchMemoryUsageSnapshot(
     bool Reclaiming,
     bool BackgroundReclaiming)
 {
+    public long PhysicalMemoryTotalBytes { get; init; }
+    public DateTimeOffset SampledAtUtc { get; init; }
+    public long SampleDurationMilliseconds { get; init; }
+    public bool IsServerGc { get; init; }
+    public long GcMemoryInfoIndex { get; init; }
+    public long GcHighMemoryLoadThresholdBytes { get; init; }
+    public long GcTotalAvailableMemoryBytes { get; init; }
+    public bool HasPhysicalMemorySample => PhysicalMemoryTotalBytes > 0;
+    public long? PhysicalMemoryAvailableBytes => HasPhysicalMemorySample
+        ? Math.Clamp(PhysicalMemoryTotalBytes - PhysicalMemoryUsedBytes, 0, PhysicalMemoryTotalBytes)
+        : null;
     public bool HasGcWall => SearchAllocationLimitBytes != long.MaxValue;
     public double AllocationPressureRatio => HasGcWall
         ? Math.Clamp(SearchAllocatedBytes / (double)Math.Max(1, SearchAllocationLimitBytes), 0d, 1d)
         : 0d;
     public double SystemPressureRatio => SystemMemoryLimitBytes != long.MaxValue
         ? Math.Clamp(
-            ProjectedSystemMemoryLoadBytes / (double)Math.Max(1, SystemMemoryLimitBytes),
+            Math.Max(PhysicalMemoryUsedBytes, ProjectedSystemMemoryLoadBytes) / (double)Math.Max(1, SystemMemoryLimitBytes),
             0d,
             1d)
         : 0d;
     public bool SystemPressureDominates => SystemPressureRatio > AllocationPressureRatio;
-    public long EffectiveSystemMemoryLimitBytes
-        => SystemMemoryLimitBytes == long.MaxValue
-            ? Math.Max(1, PhysicalMemoryUsedBytes)
-            : Math.Max(1, SystemMemoryLimitBytes);
     public long SystemOccupiedBytes
         => Math.Clamp(
             PhysicalMemoryUsedBytes - ProcessWorkingSetBytes,
             0,
-            EffectiveSystemMemoryLimitBytes);
-    public long ProcessMemoryLimitBytes
-        => Math.Max(1, EffectiveSystemMemoryLimitBytes - SystemOccupiedBytes);
-    public double ProcessMemoryPressureRatio
-        => Math.Clamp(
-            ProcessWorkingSetBytes / (double)ProcessMemoryLimitBytes,
-            0d,
-            1d);
+            PhysicalMemoryTotalBytes);
+    public double CleanupPressureRatio => Math.Max(AllocationPressureRatio, SystemPressureRatio);
     public double SystemSegmentRatio
-        => Math.Clamp(
-            SystemOccupiedBytes / (double)EffectiveSystemMemoryLimitBytes,
-            0d,
-            1d);
+        => HasPhysicalMemorySample ? SystemOccupiedBytes / (double)PhysicalMemoryTotalBytes : 0d;
     public double ProcessSegmentRatio
-        => Math.Min(
+        => HasPhysicalMemorySample ? Math.Min(
             1d - SystemSegmentRatio,
             Math.Clamp(
-                ProcessWorkingSetBytes / (double)EffectiveSystemMemoryLimitBytes,
+                Math.Min(ProcessWorkingSetBytes, PhysicalMemoryUsedBytes) / (double)PhysicalMemoryTotalBytes,
                 0d,
-                1d));
+                1d)) : 0d;
 }
 
 internal sealed class SearchProgressDisplayState(long startedAtTick)

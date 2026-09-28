@@ -41,7 +41,10 @@ internal sealed partial class CombatBeamSolver(
     int? earliestPotionTurn = null,
     int earlyTurnScoutDepth = 0,
     Action<int, IReadOnlyList<EarlyTurnFrontierCandidate>>? earlyTurnScoutObserver = null,
-    PlanAction? initialActionConstraint = null)
+    PlanAction? initialActionConstraint = null,
+    PlanCommitment? planCommitment = null,
+    ContinuationPurpose? attributionPurpose = null,
+    DirectSearchPurpose? directSearchPurpose = null)
 {
     private readonly SolverSearchProfile _profile = searchProfile ?? SolverSearchProfile.Default;
     private readonly SearchRunContext _run = new(
@@ -78,6 +81,9 @@ internal sealed partial class CombatBeamSolver(
     private readonly SearchInteractionState? _interaction = policy.Interaction;
     private readonly DevelopmentSearchStrategy? _developmentStrategy = policy.DevelopmentStrategy;
     private readonly IReadOnlyList<PlanAction> _fixedPrefixActions = fixedPrefixActions ?? [];
+    private readonly PlanCommitment? _planCommitment = planCommitment;
+    private readonly ContinuationPurpose? _attributionPurpose = attributionPurpose;
+    private readonly DirectSearchPurpose? _directSearchPurpose = directSearchPurpose;
     private readonly bool _resetFixedPrefixSchedulingBaseline = resetFixedPrefixSchedulingBaseline;
     private readonly int _earlyTurnScoutDepth = earlyTurnScoutDepth;
     private readonly Action<int, IReadOnlyList<EarlyTurnFrontierCandidate>>? _earlyTurnScoutObserver = earlyTurnScoutObserver;
@@ -116,7 +122,8 @@ internal sealed partial class CombatBeamSolver(
         _run,
         EvaluateStandPat,
         PrepareStandPatProbes,
-        _developmentStrategy);
+        _developmentStrategy,
+        _planCommitment);
     private FinalPlanOrdering? _finalOrdering;
     private FinalPlanOrdering FinalOrdering => _finalOrdering ??= new FinalPlanOrdering(
         _potionPolicy,

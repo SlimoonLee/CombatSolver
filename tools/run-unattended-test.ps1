@@ -245,6 +245,10 @@ param(
     [int]$SearchBeamWidthForTest = -1,
     [ValidateScript({ $_ -eq -1 -or $_ -ge 100 })]
     [int]$SearchMaxExpandedNodesForTest = -1,
+    [ValidateSet("", "CurrentEnergy", "PersistentBuffDelta", "EnemyHp")]
+    [string]$BeamWeightTermForTest = "",
+    [ValidateScript({ $_ -eq -1 -or ($_ -ge 0 -and $_ -le 2) })]
+    [double]$BeamWeightScaleForTest = -1,
     [int]$ShortMaxCardBranchesPerNodeForTest = -1,
     [int]$DeepMaxCardBranchesPerNodeForTest = -1,
     [ValidateSet("", "Disabled", "Smart", "RequireAtLeastOne")]
@@ -287,6 +291,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (($BeamWeightTermForTest -ne "") -ne ($BeamWeightScaleForTest -ge 0)) {
+    throw "BeamWeightTermForTest and BeamWeightScaleForTest must be given together."
+}
 # Capture the exact launch environment so an owned process cannot be reused
 # after the requested CLR/profile combination changes. Parent settings stay intact.
 $runtimeEnvironment = [ordered]@{
@@ -957,6 +964,8 @@ $request = [ordered]@{
     performancePresetForTest = if ([string]::IsNullOrWhiteSpace($PerformancePresetForTest)) { $null } else { $PerformancePresetForTest }
     searchBeamWidthForTest = if ($SearchBeamWidthForTest -ge 0) { $SearchBeamWidthForTest } else { $null }
     searchMaxExpandedNodesForTest = if ($SearchMaxExpandedNodesForTest -ge 0) { $SearchMaxExpandedNodesForTest } else { $null }
+    beamWeightTermForTest = if ($BeamWeightTermForTest) { $BeamWeightTermForTest } else { $null }
+    beamWeightScaleForTest = if ($BeamWeightScaleForTest -ge 0) { $BeamWeightScaleForTest } else { $null }
     shortMaxCardBranchesPerNodeForTest = if ($ShortMaxCardBranchesPerNodeForTest -gt 0) { $ShortMaxCardBranchesPerNodeForTest } else { $null }
     deepMaxCardBranchesPerNodeForTest = if ($DeepMaxCardBranchesPerNodeForTest -gt 0) { $DeepMaxCardBranchesPerNodeForTest } else { $null }
     potionPolicyForTest = if ([string]::IsNullOrWhiteSpace($PotionPolicyForTest)) { $null } else { $PotionPolicyForTest }

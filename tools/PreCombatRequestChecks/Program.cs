@@ -3,6 +3,14 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Models;
 
 int passed = 0;
+await Check("worker identity disables nested forecasts", () =>
+{
+    CombatSolver.Entry.IsPreCombatWorker = true;
+    try { Equal(false, PreCombatForecastApi.IsAvailable); }
+    finally { CombatSolver.Entry.IsPreCombatWorker = false; }
+    Equal(CombatSolver.Api.OperatingSystem.IsWindows(), PreCombatForecastApi.IsAvailable);
+    return Task.CompletedTask;
+});
 await Check("force refresh bypasses an active request", async () =>
 {
     RunState run = NewRun();

@@ -53,6 +53,7 @@ internal sealed partial class UnattendedTestRunner
         public void ApplyAct3BossStrategyOverride(bool? enabled) => Act3BossStrategyOverride = enabled;
         public bool MeasureSearchPhases { get; private set; }
         public int? SearchMaxDegreeOfParallelismOverride { get; private set; }
+        public BeamWeightPerturbation? BeamWeightPerturbationOverride { get; private set; }
         public bool UseNoveltyPortfolioOverride { get; private set; }
         public bool UseBeamWidthPortfolioOverride { get; private set; }
         public IReadOnlyList<int>? BeamWidthPortfolioWidthsOverride { get; private set; }
@@ -384,6 +385,11 @@ internal sealed partial class UnattendedTestRunner
                     $"实际为 {maxDegreeOfParallelism}。");
             }
             SearchMaxDegreeOfParallelismOverride = request.SearchMaxDegreeOfParallelismForTest;
+            if (request.BeamWeightTermForTest.HasValue != request.BeamWeightScaleForTest.HasValue)
+                throw new InvalidOperationException("Beam 权重敏感度测试必须同时指定项目和倍率。");
+            BeamWeightPerturbationOverride = request.BeamWeightTermForTest is { } term
+                ? new BeamWeightPerturbation(term, request.BeamWeightScaleForTest!.Value)
+                : null;
             UseNoveltyPortfolioOverride = request.UseNoveltyPortfolioForTest == true;
             if (request.BeamWidthPortfolioWidthsForTest is { Length: > 0 } widths
                 && widths.Any(static width => width < 1))
@@ -434,6 +440,7 @@ internal sealed partial class UnattendedTestRunner
             FixedSearchBudget = false;
             MeasureSearchPhases = false;
             SearchMaxDegreeOfParallelismOverride = null;
+            BeamWeightPerturbationOverride = null;
             UseNoveltyPortfolioOverride = false;
             UseBeamWidthPortfolioOverride = false;
             BeamWidthPortfolioWidthsOverride = null;
