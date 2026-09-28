@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.MonsterMoves;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Random;
+using CombatSolver.Engine.InCombat.Simulation;
 
 namespace CombatSolver;
 
@@ -27,6 +28,38 @@ internal sealed class IntentForecast
 
 internal static class IntentForecaster
 {
+    internal static IntentForecast BuildSampled(CombatPredictionSimulator root, int roundCount)
+    {
+        CombatPredictionSimulator simulator = root.Fork();
+        SimulatedCombatState combat = (SimulatedCombatState)simulator.State.CombatState;
+        List<IReadOnlyList<ForecastMove>> rounds = [];
+        List<int> counters = [];
+        for (int round = 0; round < roundCount; round++)
+        {
+            IReadOnlyList<ForecastMove> moves = combat.CurrentMonsterMoves();
+            rounds.Add(moves);
+            counters.Add(simulator.Rng.MonsterAiState.Counter);
+            if (round + 1 >= roundCount)
+                break;
+            foreach (ForecastMove move in moves)
+            {
+                if (MonsterMoveEffects.RemovesOwner(move.Owner.Monster!, move.Move.Id))
+                    simulator.State.RemoveCreature(move.Owner);
+                else
+                    combat.AdvanceMonsterAi(move.Owner, simulator);
+            }
+        }
+        return new IntentForecast
+        {
+            Rounds = rounds,
+            MonsterAiCountersByRound = counters,
+            HasUnsupportedIntent = false,
+            IsExactForModeledDamage = false,
+            UnsupportedDetails = [],
+            ApproximationDetails = ["Blind intent forecast omits future combat effects."],
+        };
+    }
+
     private sealed class Cursor(MonsterModel monster)
     {
         public MonsterModel Monster { get; } = monster;

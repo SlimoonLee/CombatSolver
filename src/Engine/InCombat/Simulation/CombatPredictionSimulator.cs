@@ -149,6 +149,12 @@ internal sealed partial class CombatPredictionSimulator
     }
 
     public CombatPredictionSimulator Fork()
+        => ForkCore(Rng.Fork());
+
+    internal CombatPredictionSimulator ForkWithSampleSeed(ulong sampleSeed)
+        => ForkCore(CombatPredictionRngSet.FromSampleSeed(sampleSeed));
+
+    private CombatPredictionSimulator ForkCore(CombatPredictionRngSet rng)
     {
         GuardOrdinaryCardContinuationFork();
         GuardOrdinaryExecutionContinuationFork();
@@ -162,7 +168,7 @@ internal sealed partial class CombatPredictionSimulator
         return new CombatPredictionSimulator(
             trace,
             state,
-            Rng.Fork(),
+            rng,
             stateStore,
             history,
             IsInProgress,

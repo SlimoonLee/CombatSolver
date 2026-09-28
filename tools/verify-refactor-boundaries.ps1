@@ -965,7 +965,11 @@ $rootModelBoundaryChecks = @(
     },
     @{
         Path = Join-Path $repositoryRoot "src\Search\SimulatedCombatState.cs"
-        Text = "RunRngSet.FromSave(_runRngSnapshot)"
+        Text = "RunRngSet.FromSave(_sampleRunRngSnapshot ?? _runRngSnapshot)"
+    },
+    @{
+        Path = Join-Path $repositoryRoot "src\Search\SimulatedCombatState.cs"
+        Text = "_sampleRunRngSnapshot = source._sampleRunRngSnapshot"
     },
     @{
         Path = Join-Path $repositoryRoot "src\Prediction\RelicPredictionStateSupport.cs"

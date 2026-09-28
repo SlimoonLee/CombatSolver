@@ -405,7 +405,8 @@ internal sealed partial class CombatBeamSolver
             potionPolicyOverride: _potionPolicy,
             potionFreePolicyBaseline: _potionFreePolicyBaseline,
             maximumPotionUses: _maximumPotionUses,
-            earliestPotionTurn: _earliestPotionTurn);
+            earliestPotionTurn: _earliestPotionTurn,
+            initialActionConstraint: _initialActionConstraint);
         worker._run.InitialPersistentBuffValue = _run.InitialPersistentBuffValue;
         worker._run.InitialEnemyStrengthSuppression = _run.InitialEnemyStrengthSuppression;
         worker._run.InitialEnemyWeakTurns = _run.InitialEnemyWeakTurns;
@@ -527,6 +528,8 @@ internal sealed partial class CombatBeamSolver
                     CardStateKey: cardStateKey,
                     CardStateOccurrence: cardStateOccurrence,
                         CardEnchantmentId: card.Preview.Enchantment?.Id.Entry ?? "", CardUpgradeLevel: card.Preview.CurrentUpgradeLevel);
+                if (!AllowsInitialAction(node, planAction))
+                    continue;
                 actions.Add(new PreparedCardAction(
                     planAction,
                     card.Preview.Type,
@@ -812,6 +815,8 @@ internal sealed partial class CombatBeamSolver
                     PotionSlot: potionSlot,
                     PotionId: potion.Id.Entry,
                     PotionTitle: displayNames.Potion(potion));
+                if (!AllowsInitialAction(node, baseAction))
+                    continue;
                 actions.Add(new PreparedPotionAction(baseAction, potion));
             }
         }
@@ -904,7 +909,8 @@ internal sealed partial class CombatBeamSolver
         IEnumerable<(PlanAction Action, SimulationSnapshot Snapshot)>? resolvedBranches = null)
     {
         SimulationSnapshot snapshot = node.Snapshot;
-        if (snapshot.PlayerDead || snapshot.AllEnemiesDead)
+        if (snapshot.PlayerDead || snapshot.AllEnemiesDead
+            || !AllowsInitialAction(node, new PlanAction(PlanActionKind.EndTurn, node.Turn)))
             return null;
 
         List<CrossTurnStandPatBaseline>? directStandPatBaselines =

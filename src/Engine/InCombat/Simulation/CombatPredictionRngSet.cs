@@ -1,5 +1,7 @@
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.Saves.Runs;
 using CombatSolver.Engine.Common;
 
 namespace CombatSolver.Engine.InCombat.Simulation;
@@ -83,6 +85,28 @@ internal sealed class CombatPredictionRngSet
         _niche = Stream.Capture(rng.Niche);
     }
 
+    private CombatPredictionRngSet(
+        Rng shuffle,
+        Rng combatCardGeneration,
+        Rng combatPotionGeneration,
+        Rng combatCardSelection,
+        Rng combatEnergyCosts,
+        Rng combatTargets,
+        Rng combatOrbGeneration,
+        Rng monsterAi,
+        Rng niche)
+    {
+        _shuffle = Stream.Capture(shuffle);
+        _combatCardGeneration = Stream.Capture(combatCardGeneration);
+        _combatPotionGeneration = Stream.Capture(combatPotionGeneration);
+        _combatCardSelection = Stream.Capture(combatCardSelection);
+        _combatEnergyCosts = Stream.Capture(combatEnergyCosts);
+        _combatTargets = Stream.Capture(combatTargets);
+        _combatOrbGeneration = Stream.Capture(combatOrbGeneration);
+        _monsterAi = Stream.Capture(monsterAi);
+        _niche = Stream.Capture(niche);
+    }
+
     private CombatPredictionRngSet(CombatPredictionRngSet source)
     {
         _shuffle = source._shuffle.Fork();
@@ -97,6 +121,50 @@ internal sealed class CombatPredictionRngSet
     }
 
     public static CombatPredictionRngSet From(RunRngSet rng) => new(rng);
+
+    /// <summary>
+    /// Creates a combat-only RNG portfolio member without reading the live run RNG.
+    /// Each combat stream receives an independent SplitMix64-derived seed.
+    /// </summary>
+    internal static CombatPredictionRngSet FromSampleSeed(ulong sampleSeed)
+    {
+        ulong state = sampleSeed;
+        return new(
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)),
+            new Rng(NextSampleSeed(ref state)));
+    }
+
+    private static ulong NextSampleSeed(ref ulong state)
+    {
+        state += 0x9E3779B97F4A7C15UL;
+        ulong value = state;
+        value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9UL;
+        value = (value ^ (value >> 27)) * 0x94D049BB133111EBUL;
+        return value ^ (value >> 31);
+    }
+
+    internal SerializableRunRngSet ToSampleRunSnapshot(ulong sampleSeed)
+    {
+        SerializableRunRngSet result = new RunRngSet(
+            "blind-" + sampleSeed.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToSerializable();
+        result.Rngs[RunRngType.Shuffle] = ShuffleState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatCardGeneration] = CombatCardGenerationState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatPotionGeneration] = CombatPotionGenerationState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatCardSelection] = CombatCardSelectionState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatEnergyCosts] = CombatEnergyCostsState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatTargets] = CombatTargetsState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.CombatOrbs] = CombatOrbGenerationState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.MonsterAi] = MonsterAiState.ToRng().ToSerializable();
+        result.Rngs[RunRngType.Niche] = NicheState.ToRng().ToSerializable();
+        return result;
+    }
 
     internal CombatPredictionRngSet Fork() => new(this);
 }

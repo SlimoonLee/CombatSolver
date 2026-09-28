@@ -61,6 +61,7 @@ internal sealed partial class SimulatedCombatState
     private readonly IReadOnlySet<CardModel> _rootFloatingCards;
     private readonly IReadOnlySet<Creature> _rootDeadCreatures;
     private readonly SerializableRunRngSet _runRngSnapshot;
+    private SerializableRunRngSet? _sampleRunRngSnapshot;
     private readonly int _currentActIndex;
     private readonly RoomType? _currentRoomType;
     private readonly MapCoord? _currentMapCoord;
@@ -435,6 +436,7 @@ internal sealed partial class SimulatedCombatState
     {
         _runState = source._runState;
         _runRngSnapshot = source._runRngSnapshot;
+        _sampleRunRngSnapshot = source._sampleRunRngSnapshot;
         _currentActIndex = source._currentActIndex;
         _currentRoomType = source._currentRoomType;
         _currentMapCoord = source._currentMapCoord;
@@ -1609,7 +1611,10 @@ internal sealed partial class SimulatedCombatState
     }
 
     CombatPredictionRngSet ICombatPredictionRunSnapshot.CreatePredictionRngSet()
-        => CombatPredictionRngSet.From(RunRngSet.FromSave(_runRngSnapshot));
+        => CombatPredictionRngSet.From(RunRngSet.FromSave(_sampleRunRngSnapshot ?? _runRngSnapshot));
+
+    internal void SetSampleRunRngSnapshot(ulong sampleSeed, CombatPredictionRngSet rng)
+        => _sampleRunRngSnapshot = rng.ToSampleRunSnapshot(sampleSeed);
 
     private MirroredHookListenerLayout? _mirroredHookLayout;
     private MirroredHookListenerLayout? _mirroredRunHookLayout;
@@ -2723,7 +2728,7 @@ internal sealed partial class SimulatedCombatState
     public Creature CreateCreature(MonsterModel monster, CombatSide side, string? slot)
     {
         monster.AssertMutable();
-        monster.RunRng = RunRngSet.FromSave(_runRngSnapshot);
+        monster.RunRng = RunRngSet.FromSave(_sampleRunRngSnapshot ?? _runRngSnapshot);
         Creature creature = new(monster, side, slot)
         {
             CombatState = this,

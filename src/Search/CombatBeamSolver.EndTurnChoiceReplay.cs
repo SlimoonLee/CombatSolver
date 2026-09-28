@@ -31,7 +31,8 @@ internal sealed partial class CombatBeamSolver
             {
                 branches = ResolvePreparedEndTurnChoices(parent, frontier.EndTurn!, frontier);
             }
-            else if (parent.Snapshot.PlayerDead || parent.Snapshot.AllEnemiesDead)
+            else if (parent.Snapshot.PlayerDead || parent.Snapshot.AllEnemiesDead
+                || !AllowsInitialAction(parent, new PlanAction(PlanActionKind.EndTurn, parent.Turn)))
             {
                 completed = true;
                 return new PreparedEndTurnEvaluation(batch, null, null);

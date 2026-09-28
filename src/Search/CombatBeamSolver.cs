@@ -40,7 +40,8 @@ internal sealed partial class CombatBeamSolver(
     PrimarySearchIncumbent? primaryIncumbent = null,
     int? earliestPotionTurn = null,
     int earlyTurnScoutDepth = 0,
-    Action<int, IReadOnlyList<EarlyTurnFrontierCandidate>>? earlyTurnScoutObserver = null)
+    Action<int, IReadOnlyList<EarlyTurnFrontierCandidate>>? earlyTurnScoutObserver = null,
+    PlanAction? initialActionConstraint = null)
 {
     private readonly SolverSearchProfile _profile = searchProfile ?? SolverSearchProfile.Default;
     private readonly SearchRunContext _run = new(
@@ -71,6 +72,7 @@ internal sealed partial class CombatBeamSolver(
     private readonly int? _maximumPotionUses = maximumPotionUses;
     private readonly int _minimumPotionUses = minimumPotionUses ?? 0;
     private readonly int? _earliestPotionTurn = earliestPotionTurn;
+    private readonly PlanAction? _initialActionConstraint = initialActionConstraint;
     private readonly PotionFreePolicyBaseline? _potionFreePolicyBaseline = potionFreePolicyBaseline;
     private PrimarySearchIncumbent? _primaryIncumbent = primaryIncumbent;
     private readonly SearchInteractionState? _interaction = policy.Interaction;
@@ -137,6 +139,10 @@ internal sealed partial class CombatBeamSolver(
             potionId,
             _potionPolicy,
             _forceAllPotionsDisabled);
+
+    private bool AllowsInitialAction(SearchNode node, PlanAction action)
+        => _initialActionConstraint == null || node.ActionCount > 0
+            || BlindCombatCommand.Matches(_initialActionConstraint, action);
 
     private static int ExplicitPotionUseCount(SearchNode node)
         => PotionUsePolicy.ExplicitUseCount(

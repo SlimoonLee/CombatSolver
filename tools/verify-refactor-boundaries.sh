@@ -903,7 +903,8 @@ while IFS=$'\t' read -r relative_path text; do
 done <<'EOF'
 src/Search/SimulatedCombatState.cs	Live combat state can only be captured on the main thread.
 src/Search/SimulatedCombatState.cs	PredictionUtils.CreateRelic(relic, player)
-src/Search/SimulatedCombatState.cs	RunRngSet.FromSave(_runRngSnapshot)
+src/Search/SimulatedCombatState.cs	RunRngSet.FromSave(_sampleRunRngSnapshot ?? _runRngSnapshot)
+src/Search/SimulatedCombatState.cs	_sampleRunRngSnapshot = source._sampleRunRngSnapshot
 src/Prediction/RelicPredictionStateSupport.cs	CaptureRootState(
 src/Prediction/PowerPredictionStateSupport.cs	HardenedShellPredictionState(original)
 src/Search/SimulatedCombatState.cs	PowerPredictionStateSupport.CaptureRootState(simulator, mutable, power)

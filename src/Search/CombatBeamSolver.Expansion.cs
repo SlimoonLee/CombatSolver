@@ -120,6 +120,8 @@ internal sealed partial class CombatBeamSolver
                     CardStateKey: cardStateKey,
                     CardStateOccurrence: cardStateOccurrence,
                         CardEnchantmentId: card.Preview.Enchantment?.Id.Entry ?? "", CardUpgradeLevel: card.Preview.CurrentUpgradeLevel);
+                if (!AllowsInitialAction(node, action))
+                    continue;
                 using CardChoiceReplayCapture? cardCapture = PrepareCardChoiceCapture(node, action);
                 SimulationSnapshot probeSnapshot = ReplayAction(node, action, cardChoiceCapture: cardCapture);
 
@@ -336,6 +338,8 @@ internal sealed partial class CombatBeamSolver
                     PotionSlot: potionSlot,
                     PotionId: potion.Id.Entry,
                     PotionTitle: displayNames.Potion(potion));
+                if (!AllowsInitialAction(node, baseAction))
+                    continue;
                 using PotionChoiceReplayCheckpoint? checkpoint = PreparePotionChoiceOptions(
                     node, baseAction, potion, out SimulationSnapshot? probeSnapshot,
                     out IReadOnlyList<PlanCardChoice?> choices, out CardChoiceSpec? choiceSpec);

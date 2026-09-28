@@ -14,6 +14,20 @@
 
 ## 1. 运行链
 
+### Blind RNG 样本入口
+
+`CombatPredictionRngSet.FromSampleSeed` 为九条战斗 RNG 生成独立的 SplitMix64 派生流；它不读取或写回 live `RunRngSet`。`CombatRootSnapshot.ForkForSample` 只接受单人、玩家侧、稳定 Play 阶段的冻结根：保留手牌、当前意图和已有状态，将未知抽牌按逐实例语义键规范排序后独立采样；只有观察者显式声明的堆顶前缀保留原序，默认前缀长度为 0。采样不是原生洗牌事件，不触发 Hook 或写历史。
+
+未来意图由 `IntentForecaster.BuildSampled` 从采样分支重建，不沿用 live RNG 生成的未来 forecast；该启发式 forecast 明确省略未来战斗效果。样本的 Live/ContinuationStamp 重新计算，确定药水奖励预测关闭。`SimulatedCombatState` 保存只读的采样 run RNG 快照并随 Fork 继承，后续创建怪物也使用采样快照。
+
+`CombatSearchCoordinator.SolveBlind` 分两步复用既有语义：先对每个样本运行 Coordinator，收集首个命令并补入 EndTurn；再对每个候选、每个样本运行带 `initialActionConstraint` 的 Beam 搜索。约束在串行/并行卡牌、药水和结束回合准备入口生效，worker 继承同一约束，后续动作照常展开；普通确定性搜索的约束为 null。每个候选的均值和最差四分之一战损都来自完整评估矩阵，不能只使用该候选赢得发现阶段的样本。
+
+`Majority` 先比较发现阶段票数，再比较矩阵均分；`MeanScore` 先比较矩阵均分；`RiskAverse` 依次比较搜索结果仍存活的比例、最差四分之一战损、完整胜利比例和均分。命令包括卡牌、药水或 EndTurn；`BlindCombatCommand` 去掉样本中的选牌、嵌套选择、下回合选择和预测遗物效果。发起命令后，选择页面和下一稳定决策点都需要重新观察。
+
+该入口当前是 `internal`，由 `tools/OfflineSearchHarness` 使用。`blindPolicy` 导出样本 seed、发现证据、完整评估矩阵、动作统计及全部搜索工作量；代表性 `SolverResult` 仅用于诊断，不能作为 live route 或续用缓存。宿主不导出原根 RNG 戳、隐藏牌序或样本续用计划，搜索后重新捕获 live 状态和冻结影子状态验证根未被修改。在线 mid-combat Runtime、可见状态序列化协议和选牌续接尚未接入。
+
+这是有限候选的采样近似：候选来自各样本的最佳首命令；后续搜索仍针对各自确定化未来优化。均分不是严格的部分可观测策略价值，存活/胜利比例也不是经真实 rollout 校准的战斗胜率；搜索边界和代表样本的指标必须保留。
+
 ### 单一搜索预算与兼容边界
 
 遗物计数策略由 `RelicCounterCatalog` 声明已核对的跨战斗计数，Runtime 过滤总/单项开关与当前持有对象，冻结到 `SearchPolicySnapshot.RelicTargets`。`SimulatedCombatState.RelicCounters` 只投影既有分支状态，`RelicCounterPolicy` 生成范围达标掩码和一次性 HP 额度。快照的 `StrategicHpCredit` 汇总成长与计数额度，终局/中间排序、用药审计及保路共享；真实战损早停仍须同时满足成长、药水、偷窃和已启用的遗物目标。`SolverRelicStrategyPanel` 拥有 UI 输入，Overlay 只接线，Controller 使续用失效并按原自动计算偏好重算。设置导出、归档恢复与磁盘路线键携带同一策略，旧包默认关闭。见 [完整计数清单](relic-counters.md)。

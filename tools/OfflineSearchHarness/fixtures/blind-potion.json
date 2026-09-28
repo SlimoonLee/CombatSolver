@@ -1,0 +1,15 @@
+{
+  "scenarioId": "BLIND-POTION-001",
+  "characterId": "IRONCLAD",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-potion-20260928",
+  "enemyCurrentHp": 20,
+  "initialPlayerEnergy": 0,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 1 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 2 }
+  ],
+  "potions": [{ "potionId": "FIRE_POTION" }]
+}

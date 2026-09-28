@@ -306,14 +306,71 @@ internal static class ModRuntime
         observePortfolio = policy.PortfolioExperiment?.Observe != null,
     };
 
+    private static BlindSearchResult SolveBlind(
+        CombatRootSnapshot root,
+        SolverDisplayNames names,
+        BattleDamageSnapshot damage,
+        SearchPolicySnapshot basePolicy,
+        HarnessOptions options,
+        out object describedPolicy)
+    {
+        BlindAggregationMode aggregation = Enum.Parse<BlindAggregationMode>(
+            options.BlindAggregation, ignoreCase: true);
+        SearchPolicySnapshot policy = basePolicy with
+        {
+            FixedBudget = true,
+            BudgetOverrideMilliseconds = options.BudgetMilliseconds,
+            RequestWorkTotals = null,
+            PortfolioTelemetry = null,
+            Interaction = null,
+            Profile = basePolicy.Profile with
+            {
+                SoftTimeBudgetMilliseconds = options.BudgetMilliseconds,
+            },
+        };
+        describedPolicy = DescribePolicy(policy);
+        BlindSearchOptions blindOptions = new(
+            BlindSearchOptions.GenerateSampleSeeds(options.BlindSeed, options.BlindSamples),
+            aggregation,
+            options.BudgetMilliseconds,
+            options.BlindKnownTopDrawCards);
+        return CombatSearchCoordinator.SolveBlind(
+            root, names, damage, policy, blindOptions, CancellationToken.None);
+    }
+
+    private static object DescribeBlindPolicy(BlindSearchResult result)
+        => new
+        {
+            aggregation = result.Aggregation.ToString(),
+            selectedActionKey = result.SelectedActionKey,
+            selectedAction = result.SelectedAction,
+            requiresReobserve = true,
+            metricScope = "representative_sample",
+            result.SearchRuns,
+            result.TotalExpandedNodes,
+            result.TotalTransitionCount,
+            result.Elapsed,
+            samples = result.Samples,
+            evaluations = result.Evaluations,
+            actionSummaries = result.ActionSummaries,
+        };
+
+    private static string DescribePlanAction(PlanAction action)
+        => $"{action.Turn}:{action.Kind}:{(string.IsNullOrEmpty(action.CardId)
+            ? action.PotionId
+            : action.CardId) ?? "-"}"
+            + $":target={action.TargetCombatId?.ToString() ?? "-"}:key={action.CardStateKey}";
+
     internal sealed record SearchOutcome(
         SolverResult Result,
         object? SolverMetrics,
         object Policy,
+        object? BlindPolicy,
         Dictionary<string, object?> LegacyMetrics,
         Dictionary<string, object?> RootCapture,
-        string RootContinuationStamp,
-        string RootLiveStamp,
+        string? RootContinuationStamp,
+        string? RootLiveStamp,
+        bool? RootUnchanged,
         object[] RouteActions,
         string[] PlanActions,
         object[] Continuations,
@@ -383,6 +440,9 @@ internal static class ModRuntime
             ProbeRootCapture(state);
         System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
         CombatRootSnapshot root = CombatRootSnapshot.Capture(state);
+        if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_BLIND_CHECKS") == "1")
+            File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-checks.json"),
+                JsonSerializer.Serialize(BlindSearchContracts.Run(root), UnattendedTestFiles.JsonOptions));
         HarnessLog.Trace("root_captured");
         SolverDisplayNames names = SolverDisplayNames.Capture(state);
         BattleDamageSnapshot damage = BattleDamageTracker.Observe(state);
@@ -454,6 +514,7 @@ internal static class ModRuntime
         bool timeBoundary = false;
         object describedPolicy = DescribePolicy(policy);
         SolverResult result;
+        BlindSearchResult? blindResult = null;
         if (options.EnableNoGcRegion)
         {
             if (options.SignalBallastMegabytes > 0)
@@ -473,10 +534,18 @@ internal static class ModRuntime
                 : null;
             try
             {
-                result = options.SearchMode == "Coordinator"
-                    ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
-                    : SolveEvaluate(root, names, damage, policy, settings,
-                        options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+                if (options.BlindSamples > 0)
+                {
+                    blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy);
+                    result = blindResult.RepresentativeResult;
+                }
+                else
+                {
+                    result = options.SearchMode == "Coordinator"
+                        ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
+                        : SolveEvaluate(root, names, damage, policy, settings,
+                            options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+                }
             }
             finally
             {
@@ -485,10 +554,28 @@ internal static class ModRuntime
         }
         else
         {
-            result = options.SearchMode == "Coordinator"
-                ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
-                : SolveEvaluate(root, names, damage, policy, settings,
-                    options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+            if (options.BlindSamples > 0)
+            {
+                blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy);
+                result = blindResult.RepresentativeResult;
+            }
+            else
+            {
+                result = options.SearchMode == "Coordinator"
+                    ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
+                    : SolveEvaluate(root, names, damage, policy, settings,
+                        options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+            }
+        }
+        if (blindResult != null)
+        {
+            timeBoundary = blindResult.Samples.Any(sample => sample.BoundaryReason == SearchBoundaryReason.TimeLimit)
+                || blindResult.Evaluations.Any(sample => sample.BoundaryReason == SearchBoundaryReason.TimeLimit);
+            ContinuationStamp liveAfter = ContinuationStamp.CaptureLive(state);
+            ContinuationStamp rootAfter = ContinuationStamp.CapturePredicted(root.PlayerIdentity,
+                root.ForkSimulator(), root.StartTurnNumber, root.Forecast, root.StartTurnNumber);
+            if (liveAfter != root.ContinuationStamp || rootAfter != root.ContinuationStamp)
+                throw new InvalidOperationException("Blind search changed the live state or frozen root.");
         }
         if (options.SearchMode == "Coordinator" && policy.MeasurePhasePerformance)
             LastPhasePerformance = SolverDiagnostics.DescribeSearchPhasePerformance(result);
@@ -528,16 +615,21 @@ internal static class ModRuntime
             result,
             session?.CaptureSolverMetrics(result),
             describedPolicy,
+            blindResult == null ? null : DescribeBlindPolicy(blindResult),
             BuildLegacyMetrics(result),
             rootCapture,
-            root.ContinuationStamp.StateText,
-            root.LiveStamp.StateText,
-            result.BestNode.Actions.Cast<object>().ToArray(),
-            result.BestNode.Actions
-                .Select(action => $"{action.Turn}:{action.Kind}:{action.CardId ?? action.PotionId ?? "-"}"
-                    + $":target={action.TargetCombatId?.ToString() ?? "-"}:key={action.CardStateKey}")
-                .ToArray(),
-            result.Continuations.Select(continuation => (object)new
+            blindResult == null ? root.ContinuationStamp.StateText : null,
+            blindResult == null ? root.LiveStamp.StateText : null,
+            blindResult == null ? null : true,
+            blindResult == null
+                ? result.BestNode.Actions.Cast<object>().ToArray()
+                : blindResult.SelectedAction is { } selected ? [selected] : [],
+            blindResult == null
+                ? result.BestNode.Actions.Select(DescribePlanAction).ToArray()
+                : blindResult.SelectedAction is { } selectedForPlan
+                    ? [DescribePlanAction(selectedForPlan)]
+                    : [],
+            blindResult != null ? [] : result.Continuations.Select(continuation => (object)new
             {
                 continuation.StartTurnNumber,
                 continuation.ForecastOffset,

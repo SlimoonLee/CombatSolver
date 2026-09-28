@@ -10,6 +10,8 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Extensions;
+using MegaCrit.Sts2.Core.Random;
 using CombatSolver.Engine.Common;
 using CombatSolver.Engine.InCombat.Simulation;
 
@@ -335,4 +337,64 @@ internal sealed class CombatRootSnapshot
     }
 
     public CombatPredictionSimulator ForkSimulator() => _rootSimulator.Fork();
+
+    /// <summary>
+    /// Samples future RNG and the unknown draw order from a frozen root. Known top cards
+    /// are supplied explicitly by the observer; no shuffle hook or history event is emitted.
+    /// </summary>
+    internal CombatRootSnapshot ForkForSample(ulong sampleSeed, int knownTopDrawCards = 0)
+    {
+        if (PlayerCount != 1 || CurrentSide != CombatSide.Player || PlayerPhase != PlayerTurnPhase.Play)
+            throw new NotSupportedException("Blind search requires a single-player Play-phase root.");
+        CombatPredictionSimulator simulator = _rootSimulator.ForkWithSampleSeed(sampleSeed);
+        ((SimulatedCombatState)simulator.State.CombatState).SetSampleRunRngSnapshot(sampleSeed, simulator.Rng);
+        SimCardPile draw = simulator.State.GetPlayerCombatState(PlayerIdentity).DrawPile;
+        if (knownTopDrawCards < 0 || knownTopDrawCards > draw.Cards.Count)
+            throw new ArgumentOutOfRangeException(nameof(knownTopDrawCards));
+        PredictedCard[] known = draw.Cards.Take(knownTopDrawCards).ToArray();
+        List<PredictedCard> unknown = draw.Cards.Skip(knownTopDrawCards)
+            .OrderBy(CardChoiceSupport.ChoiceCardKey, StringComparer.Ordinal).ToList();
+        unknown.UnstableShuffle(new Rng(sampleSeed, "blind_draw_order"));
+        draw.Clear();
+        foreach (PredictedCard card in known.Concat(unknown))
+            draw.Add(card);
+
+        IntentForecast forecast = IntentForecaster.BuildSampled(simulator, SolverWeights.SetupValueHorizonTurns);
+        ContinuationStamp stamp = ContinuationStamp.CapturePredicted(
+            PlayerIdentity, simulator, StartTurnNumber, forecast, StartTurnNumber);
+        return new(
+            PlayerIdentity,
+            Enemies,
+            forecast,
+            LiveCombatStamp.FromContinuation(stamp),
+            stamp,
+            simulator,
+            PlayerCount,
+            StartTurnNumber,
+            TotalFloor,
+            InitialPlayerHp,
+            InitialPlayerMaxHp,
+            PotionSlotCount,
+            SearchablePotions,
+            InitialAliveEnemyMask,
+            CurrentSide,
+            PlayerPhase,
+            EncounterRoomType,
+            BossHpRelief,
+            CaptureElapsedMilliseconds,
+            CapturedCardCount,
+            PlayerCardIds,
+            HasVisibleHealingSource,
+            HasOnlyPostCombatHealing,
+            HistoryDependencies,
+            CapturedPowerCount,
+            CapturedHookListenerCount,
+            CapturedRunModSubscriberCount,
+            CapturedCombatModSubscriberCount,
+            CapturedBaseLibCardModifiers,
+            HasUnusedCardReplayAllocator,
+            HasRenewablePotionShapedRock,
+            PostCombatRelicHeal,
+            PotionRewardOutlook.None);
+    }
 }

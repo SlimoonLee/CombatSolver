@@ -1,5 +1,15 @@
 # CombatSolver 开发笔记与未来构想
 
+## 未知 RNG CombatSolver（开发中，2026-09-28）
+
+- 复用现有 C# 语义后端和无 Godot 的 OfflineSearchHarness。`FromSampleSeed` / `ForkWithSampleSeed` / `ForkForSample` 独立生成九条战斗流，并规范排序、重排未知抽牌顺序；`--blind-known-top` 仅保留观察者显式声明的已知前缀。未来意图从采样分支重建，未来怪物创建继承采样 run RNG，确定药水奖励预测关闭。
+- `SolveBlind` 先发现各样本的首命令候选，再补入 EndTurn，将每个候选在全部样本上约束首动作重搜。均分、尾部战损、存活与完整胜利比例由完整矩阵计算，避免只平均赢得该动作的幸运样本。串行和并行展开共享约束；确定性模式默认不启用约束。
+- OfflineSearchHarness 增加 `--blind-samples`、`--blind-seed`、`--blind-aggregation` 和 `--blind-known-top`。`route.json` / `planActions` 只写当前命令，样本选牌及后续路线不导出，续用为空；`blindPolicy` 写发现证据、评估矩阵、动作统计和总工作量。普通指标仍属于代表样本，以 `metricScope=representative_sample` 标识。
+- 隔离验证在搜索完成后重新捕获 live 和冻结影子状态，分别与原 continuation 比较；不再用捕获时的两个旧戳相等证明未修改。`BlindSearchContracts` 的 121 项检查覆盖九条原生 RNG 序列、Fork 别名隔离、隐藏输入独立性、已知堆顶、选择去除和聚合反例。
+- 实跑 `CULTISTS_NORMAL` / IRONCLAD / 3 samples / 300 nodes / 3000 ms：Majority 的 DOP1 与 MeanScore 的 DOP2 均为 2 候选、6 次评估，首命令 BASH；排除耗时后，完整评估矩阵一致。零能量夹具为 1 候选、2 次评估、首命令 EndTurn；含 FIRE_POTION 的 DOP2/RiskAverse 夹具为 2 候选、6 次评估，药水首命令约束被实际执行。
+- Release 和宿主构建均为 0 警告/0 错误；Windows 结构门禁通过；原确定性 Coordinator 烟测通过，仍输出 14 个路线动作及根戳。证据位于外层工作区 `.local/blind-evidence-final`、`blind-evidence-parallel`、`blind-evidence-endturn`、`blind-evidence-potion` 和 `blind-evidence-deterministic`。
+- 当前是离线内部入口，未接在线 mid-combat 执行、选牌续接或真实 rollout 校准。样本内部仍按确定化未来自适应搜索，不能称为严格全分布或部分可观测最优策略；边界上的存活不等于整场存活。未运行 Linux 门禁、可见游戏或整场胜率验证；未提升版本或发布。
+
 ## 0.47.1 回归修复（2026-09-27）
 
 - 0.47.0 的结束回合实机风险上升报告中，`FullAutoStoppedAtLiveRiskWorsening` 在本次查询时有 116 份（0.46.4 为 9 份）；它与只有 3 份的 `RecalculationHpLossIncreased` 是不同信号。高重复的永世沙漏、骑士、骇鳗与棱镜报告均有首回合结束动作，却缺少首回合 `TurnOutcome`，复核把缺失值当作 0 HP。固定前缀现在记录模拟后的实际回合掉血、回血、敌方损血、格挡与剩余能量。构造场景 `FIXED-PREFIX-TURN-LOSS` 通过，永世沙漏同根短搜首回合标注为 14 HP；后者路线及搜索时限与原报告不同，不能把 116 份全称为已复现并修复。

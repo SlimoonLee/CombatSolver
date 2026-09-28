@@ -129,7 +129,9 @@ internal static class Program
                 HistoryCounterChecks.Run(combat!, options.OutputDirectory);
             payload["budget"] = DescribeBudget(options);
             payload["root"] = OfflineCombat.DescribeRoot(combat!);
-            string diagnostics = ModRuntime.DescribeStart(combat!);
+            string diagnostics = options.BlindSamples > 0
+                ? OfflineCombat.DescribeRoot(combat!)
+                : ModRuntime.DescribeStart(combat!);
             payload["rootDiagnostics"] = diagnostics;
             File.WriteAllText(Path.Combine(options.OutputDirectory, "root-diagnostics.txt"), diagnostics);
             WriteProgress(options, "M1", "ok", "已到达玩家第一回合");
@@ -151,10 +153,12 @@ internal static class Program
                 {
                     ["rootContinuationStamp"] = outcome!.RootContinuationStamp,
                     ["rootLiveStamp"] = outcome.RootLiveStamp,
+                    ["rootUnchanged"] = outcome.RootUnchanged,
                     ["rootCapture"] = outcome.RootCapture,
                     ["solverMetrics"] = outcome.LegacyMetrics,
                     ["planActions"] = outcome.PlanActions,
-                    ["cachedContinuations"] = outcome.Result.Continuations
+                    ["blindPolicy"] = outcome.BlindPolicy,
+                    ["cachedContinuations"] = outcome.BlindPolicy != null ? [] : outcome.Result.Continuations
                         .Select(item => new
                         {
                             item.StartTurnNumber,
@@ -167,6 +171,7 @@ internal static class Program
                 };
                 // 与游戏内 result.json 同名同形的那一份（游戏自己的 Writer 造的）。
                 payload["solverMetrics"] = outcome.SolverMetrics;
+                payload["blindPolicy"] = outcome.BlindPolicy;
                 // 宿主自己从 SolverResult 读的剪枝/复用计数（游戏内 result.json 没有这些字段）。
                 payload["pruneCounters"] = outcome.LegacyMetrics;
                 payload["searchPolicy"] = outcome.Policy;
@@ -236,6 +241,7 @@ internal static class Program
                 ["budget"] = payload.GetValueOrDefault("budget"),
                 ["solverMetrics"] = payload.GetValueOrDefault("solverMetrics"),
                 ["pruneCounters"] = payload.GetValueOrDefault("pruneCounters"),
+                ["blindPolicy"] = payload.GetValueOrDefault("blindPolicy"),
                 ["timeBoundaryObserved"] = payload.GetValueOrDefault("timeBoundaryObserved"),
                 ["wallSeconds"] = payload.GetValueOrDefault("wallSeconds"),
                 ["peakManagedHeapBytes"] = payload.GetValueOrDefault("peakManagedHeapBytes"),
@@ -278,6 +284,10 @@ internal static class Program
             options.BudgetMilliseconds,
             options.PotionPolicy,
             options.SearchMode,
+            options.BlindSamples,
+            options.BlindSeed,
+            options.BlindAggregation,
+            options.BlindKnownTopDrawCards,
             options.UsePortfolio,
             fixedSearchBudget = !options.ProductionBudget,
             enableNoGcRegion = options.EnableNoGcRegion,
@@ -352,6 +362,10 @@ internal sealed record HarnessOptions
           --budget-ms <int>      搜索预算毫秒（默认 600000）
           --potion-policy <p>    药水政策（默认 Smart）
           --search-mode <m>      Evaluate（单次求解，不经协调器，默认）| Coordinator（生产协调器）
+          --blind-samples <n>    未知 RNG 采样数；启用后复用 Coordinator，只输出聚合首动作
+          --blind-seed <ulong>   采样 seed 生成器的根值（默认 1）
+          --blind-aggregation <m> Majority|MeanScore|RiskAverse（默认 Majority）
+          --blind-known-top <n>  观察者已知的抽牌堆顶张数（默认 0）；其余牌序独立采样
           --use-portfolio        开宽度组合（只对 --search-mode Coordinator 有效）
           --no-plain-baseline    消融：丢掉普通基线成员（需 --use-portfolio）
           --unordered-pile-mask <0..15>  实验：状态键里顺序无关的牌堆（1手牌/2抽牌堆/4弃牌堆/8消耗堆）
@@ -403,6 +417,10 @@ internal sealed record HarnessOptions
     public int BudgetMilliseconds { get; init; } = 600_000;
     public string PotionPolicy { get; init; } = "Smart";
     public string SearchMode { get; init; } = "Evaluate";
+    public int BlindSamples { get; init; }
+    public ulong BlindSeed { get; init; } = 1;
+    public string BlindAggregation { get; init; } = "Majority";
+    public int BlindKnownTopDrawCards { get; init; }
     /// <summary>开宽度组合（协调器的组合成员通道）；Evaluate 模式下没有意义。</summary>
     public bool UsePortfolio { get; init; }
     /// <summary>消融：丢掉只带基线宽度、不带排序修饰的组合成员，少跑一次真实搜索。</summary>
@@ -454,6 +472,9 @@ internal sealed record HarnessOptions
     {
         string character = "IRONCLAD", encounter = "FUZZY_WURM_CRAWLER_WEAK", seed = "OFFLINEHARNESS1";
         int ascension = 0, actIndex = 0, dop = 1, budget = 600_000, unorderedPileMask = 0, stateKeySalt = 0;
+        int blindSamples = 0;
+        int blindKnownTop = 0;
+        ulong blindSeed = 1;
         int transpositionPruneOff = 0, memoryNoProgressLimit = 0;
         int? transpositionEntryLimit = null;
         bool measurePhases = false, enableNoGcRegion = false, productionBudget = false;
@@ -476,6 +497,7 @@ internal sealed record HarnessOptions
         bool usePortfolio = false, observePortfolio = false, noPlainBaseline = false;
         string? portfolioModelPath = null;
         string potionPolicy = "Smart", milestone = "M2", language = "eng";
+        string blindAggregation = "Majority";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
         string? output = null, requestPath = null;
         string workspace = Path.GetFullPath(Path.Combine(
@@ -510,6 +532,10 @@ internal sealed record HarnessOptions
                 case "--budget-ms": budget = int.Parse(Value()); break;
                 case "--potion-policy": potionPolicy = Value(); break;
                 case "--search-mode": searchMode = Value(); break;
+                case "--blind-samples": blindSamples = int.Parse(Value()); break;
+                case "--blind-seed": blindSeed = ulong.Parse(Value()); break;
+                case "--blind-aggregation": blindAggregation = Value(); break;
+                case "--blind-known-top": blindKnownTop = int.Parse(Value()); break;
                 case "--use-portfolio": usePortfolio = true; break;
                 case "--no-plain-baseline": noPlainBaseline = true; break;
                 case "--unordered-pile-mask": unorderedPileMask = int.Parse(Value()); break;
@@ -561,6 +587,18 @@ internal sealed record HarnessOptions
             throw new ArgumentException("--profile 只接受 Low|Medium|High|VeryHigh|Custom。");
         if (searchMode is not ("Evaluate" or "Coordinator"))
             throw new ArgumentException("--search-mode 只接受 Evaluate 或 Coordinator。");
+        if (blindSamples is < 0 or > 64)
+            throw new ArgumentException("--blind-samples 只接受 0..64。");
+        if (blindSamples > 0 && searchMode != "Coordinator")
+            throw new ArgumentException("--blind-samples 需要 --search-mode Coordinator。");
+        if (blindAggregation is not ("Majority" or "MeanScore" or "RiskAverse"))
+            throw new ArgumentException("--blind-aggregation 只接受 Majority|MeanScore|RiskAverse。");
+        if (blindKnownTop < 0 || blindKnownTop > 0 && blindSamples == 0)
+            throw new ArgumentException("--blind-known-top 必须非负并在 blind 模式下使用。");
+        if (blindSamples > 0 && (productionBudget || observePortfolio || portfolioModelPath != null))
+            throw new ArgumentException("blind 模式使用独立固定预算，不接受 production-budget 或 portfolio observation/model。");
+        if (blindSamples > 0 && budget <= 0)
+            throw new ArgumentException("blind 模式需要正的 --budget-ms。");
         if (orderingObservationLimit is < 0 or > 100000 || orderingObservationLimit > 0 && searchMode != "Evaluate")
             throw new ArgumentException("--observe-ordering 仅支持 Evaluate，范围 0..100000。");
         if (orderingWatchedStatesPath != null && orderingObservationLimit == 0)
@@ -633,6 +671,10 @@ internal sealed record HarnessOptions
             BudgetMilliseconds = budget,
             PotionPolicy = potionPolicy,
             SearchMode = searchMode,
+            BlindSamples = blindSamples,
+            BlindSeed = blindSeed,
+            BlindAggregation = blindAggregation,
+            BlindKnownTopDrawCards = blindKnownTop,
             UsePortfolio = usePortfolio,
             NoPlainBaselineMember = noPlainBaseline,
             UnorderedPileMask = unorderedPileMask,

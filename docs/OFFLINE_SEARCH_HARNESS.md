@@ -45,6 +45,10 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 | `--budget-ms <int>` | 搜索软时间预算毫秒（默认 600000） |
 | `--potion-policy <p>` | 药水政策（默认 `Smart`） |
 | `--search-mode <m>` | `Evaluate`（默认）或 `Coordinator` |
+| `--blind-samples <n>` | 未知 RNG 样本数（1..64）；启用后必须使用 `Coordinator`，只输出聚合首动作 |
+| `--blind-seed <ulong>` | 派生样本 seed 的根值（默认 `1`） |
+| `--blind-aggregation <m>` | `Majority`、`MeanScore` 或 `RiskAverse`（默认 `Majority`） |
+| `--blind-known-top <n>` | 观察者明确知道的抽牌堆顶张数（默认 0）；其余顺序独立采样 |
 | `--use-portfolio` | 开宽度组合，只对 `Coordinator` 有效 |
 | `--out/--label/--language/--verbose-game-log/--milestone` | 产物目录、标签、本地化语言码、是否打游戏日志、跑到 M1 还是 M2 |
 | `--measure-phases` | 在运行日志里输出 `SEARCH_PHASE` 逐阶段排他耗时/分配表 |
@@ -57,6 +61,28 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 超时定位可设置 `OFFLINE_HARNESS_STREAM_DIAGNOSTICS=1`：现有 Info 诊断同时写到标准输出；Coordinator 还每秒至多输出一次现有进度消息中的阶段、局部展开、配置额度和回合层等值，进程被外部结束时仍可保留已经写出的记录。进度的 `reviewed_worldlines` 不是模拟转移数，也不能替代完成结果的请求级 `TotalExpanded` / `TotalTransitions`。该模式会启用进度回调及额外输出，可能改变耗时、分配和墙钟截断，只用于定位，不能作为性能或最终质量样本。默认不开启；普通批量对照须保持关闭。
 
 启用阶段测量时，`BEAM_WIDTH_PORTFOLIO_MEMBER_START` 在进入成员前记录实际运行序号、宽度、次段/基础分/能力承诺身份，以及有效节点/时间额度。`run_index` 只计算实际运行的成员，不能当作包含跳过项的最终成员表索引。即使后续成员超时，配合同步诊断也可识别正在执行的成员；不能仅凭“正在精炼路线”的进度文案推断策略身份。
+
+## 未知 RNG 单步决策
+
+```powershell
+dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
+    --character IRONCLAD --encounter CULTISTS_NORMAL --seed blind-evidence-20260928 `
+    --search-mode Coordinator --blind-samples 3 --blind-seed 12345 `
+    --blind-aggregation MeanScore --nodes 300 --budget-ms 3000 --dop 1 `
+    --out .local/blind-smoke
+```
+
+`--seed` 构造真实战斗，`--blind-seed` 只生成未知未来的模型假设，两者用途独立。采样保留手牌和当前意图，替换未来 RNG、未知抽牌顺序和未来意图 forecast；默认不读取真实堆顶顺序作为已知信息。只有确实观察到堆顶时才提供 `--blind-known-top`。
+
+搜索先从每个样本发现首命令，再补入 EndTurn，将每个候选在全部样本上重新评估。`Majority` 比较发现阶段票数；`MeanScore` 比较完整矩阵均分；`RiskAverse` 先比较搜索结果存活比例，再比较最差四分之一战损、完整胜利比例和均分。后两种方式不会只平均某个动作赢得发现阶段的样本。
+
+`--budget-ms` 是每样本发现阶段的软预算，评估阶段另将同等预算按候选数平分；`--nodes` 仍应用于各次搜索。K 个样本、C 个候选会发起 K 次 Coordinator 和 K*C 次约束 Beam 请求，总工作量看 `blindPolicy.TotalExpandedNodes` / `TotalTransitionCount` / `Elapsed`。普通 `solverMetrics` / `pruneCounters` 属于代表样本，`metricScope=representative_sample`，不能当作采样总量。blind 模式不接受 `--production-budget`、`--observe-portfolio` 或 `--portfolio-model`。
+
+输出命令按 `Kind` 处理，可能是出牌、药水或 EndTurn。原 `PlanAction.IsExecutable` 仅表示卡牌/药水，不能用它过滤 blind 的 EndTurn。命令中的选择为空：发起动作后若出现选牌页，需要重新观察并选择；在下一个稳定决策点重新采样。当前宿主只求解开局的稳定 Play 根，尚未提供在线执行、任意 mid-combat 恢复或选牌续接协议。
+
+这属于有限候选的确定化采样；每个样本内部仍按该样本的未来优化。搜索未走到终局时，预计战损及存活只覆盖已搜索前缀，完整胜利比例也不是经真实 rollout 校准的胜率。需要保留 `BoundaryReason`，不能据此声称严格随机策略最优。
+
+可选设置 `OFFLINE_HARNESS_BLIND_CHECKS=1`，在本次根上运行 121 项采样、RNG/Fork 隔离和聚合合同并写出 `blind-checks.json`。可重跑的小夹具为 `tools/OfflineSearchHarness/fixtures/blind-endturn.json` 与 `blind-potion.json`；分别覆盖零能量 EndTurn 和药水首命令约束。这些合同验证 blind 入口，不替代完整游戏的原生差分。
 
 ## 批量用法
 
@@ -86,7 +112,8 @@ plan 每项的字段：`label`（必填，简单目录名）、`request`（必�
   读的剪枝与复用计数，游戏内那份没有）/ `timeBoundaryObserved` / `wallSeconds` / 峰值托管堆、峰值
   工作集、总分配字节 / `rootContinuationStamp` / `catalogFingerprint`。
 - `route.json`：选中路线的动作序列。
-- `root-diagnostics.txt`：`SolverDiagnostics.DescribeStart` 的根局面描述。
+- blind 模式下 `route.json` 和 `planActions` 只包含当前命令。`result.json` / `harness-result.json` 的 `blindPolicy` 含发现样本、完整候选评估矩阵、动作统计及全部工作量；不写原根 RNG 戳或样本续用计划。`rootUnchanged=true` 来自搜索后重新捕获的 live 与冻结影子状态核对。
+- `root-diagnostics.txt`：普通模式为 `SolverDiagnostics.DescribeStart` 的完整根描述；blind 模式只描述公开手牌、牌堆数量和当前战斗信息，不写隐藏抽牌顺序。
 - `search-policy.json`：这一次求解实际用的 `SearchPolicySnapshot`。
 - `harness-result.json`：上面全部加上分步时间线、绕过清单、补丁装载记录。
 

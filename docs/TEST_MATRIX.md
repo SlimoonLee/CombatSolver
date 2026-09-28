@@ -1,5 +1,20 @@
 # CombatSolver 测试清单
 
+## 未知 RNG blind 搜索（2026-09-28）
+
+| 场景 | 配置 | 结果 | 证据 |
+|---|---|---|---|
+| 采样/Fork/聚合合同 | `OFFLINE_HARNESS_BLIND_CHECKS=1`，随多样本夹具运行 | Passed：121 项，九条流原生序列/别名隔离；同可见状态及 seed 不依赖原 RNG/隐藏牌序；已知堆顶与幸运样本反例 | `blind-evidence-final/blind-checks.json` |
+| OfflineSearchHarness 多样本 | IRONCLAD / `CULTISTS_NORMAL` / seed `blind-evidence-20260928` / blind seed 12345 / 3 samples / Majority / 300 nodes / 3000 ms / DOP1 | Passed：2 候选（含 EndTurn）、6 次评估；首命令 BASH；9 次请求累计 2700 展开/8856 转移 | `blind-evidence-final/harness-result.json` |
+| 并行卡牌约束 | 同上，MeanScore / DOP2 | Passed：完整矩阵的 seed、动作、分数、战损、存活、胜利及边界与 DOP1 一致；不比较耗时 | `blind-evidence-parallel/harness-result.json` |
+| 无可打卡牌 | `fixtures/blind-endturn.json` / 2 samples / blind seed 77 / 150 nodes / 2000 ms / DOP1 | Passed：初始能量 0，1 候选、2 次评估，首命令 EndTurn | `blind-evidence-endturn/harness-result.json` |
+| 并行药水约束 | `fixtures/blind-potion.json` / 3 samples / blind seed 17 / RiskAverse / 150 nodes / 2000 ms / DOP2 | Passed：FIRE_POTION 与 EndTurn 两候选各完成 3 次评估；首命令 EndTurn | `blind-evidence-potion/harness-result.json` |
+| blind 输出与根隔离 | 以上全部采样夹具 | Passed：route 仅 1 命令，样本选择/续用为空，原根戳不导出；搜索后重捕获 live 与 shadow，`rootUnchanged=true` | 各夹具的 `harness-result.json` / `route.json` |
+| 确定性默认路径 | 同一普通新战斗，不给 blind 参数 / Coordinator / 300 nodes / 3000 ms / DOP1 | Passed：无 blind policy，根戳存在，14 个路线动作；仅烟测，不声称质量回归等价 | `blind-evidence-deterministic/harness-result.json` |
+| 构建/结构 | Release DLL + OfflineSearchHarness；Windows `verify-refactor-boundaries.ps1` | Passed：0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=213` | 本轮命令输出 |
+
+夹具位于 `tools/OfflineSearchHarness/fixtures/`；本轮证据目录位于外层工作区 `.local/`，未纳入提交。当前 blind 入口只覆盖离线宿主，合同不替代原生 actual/simulated 严格对拍。尚未执行在线 mid-combat Runtime、选择中间态重观察、完整 headless rollout、Linux 门禁或统计意义上的分布收敛验证。
+
 ## 0.47.1 紧急回归修复（2026-09-27）
 
 - `FIXED-PREFIX-TURN-LOSS` / `01ed4188c8804eedab36e7658de62a57` Passed：固定前缀先掉血再结束首回合，所选路线该回合标注与模拟累计掉血一致；实例已清理。
