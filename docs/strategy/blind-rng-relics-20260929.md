@@ -16,7 +16,7 @@
 
 | 遗物 | 状态 | 理由 |
 |---|---|---|
-| BIG_HAT / ORANGE_DOUGH | 缺 Mirror | 原版 override `AfterSideTurnStart`,模拟侧尚无该遗物 Hook 的分发面;新增属行为改动任务(需建 Hook 面 + 硬门控注册),不宜在本批就地实现 |
+| BIG_HAT / ORANGE_DOUGH | 时序不可行(勘误) | 二者的 `AfterSideTurnStart` 镜像**已在** `SimulatedCombatState.RelicTurnStart.cs` 的回合推进 switch(`when turn <= 1`);第四批曾误判为缺分发面,特此更正。真正限制与大帽子同属时序:第一回合回合开始的触发发生在盲根捕获(玩家第一回合 Play)之前,现有审计形状无法复现;原生语义验收需战斗开局流(无人测试),非盲路径批次的范围 |
 | TOOLBOX | 时序不可行 | 原版在第一回合抽牌前三选一,该触发在盲根捕获(Play 阶段)之前已被原生消耗,夹具无法在盲路径复现 |
 | `KUSARIGAMA`(锁镰:每第 3 张攻击对随机敌人 8 伤) | 已验收 | 审计命令选择特判:手牌三张攻击(TWIN_STRIKE/STRIKE/IRON_WAVE)以前缀两张 + 审计命令一张的方式跨越计数器;双敌 30/30,逐样本敌方 HP 3/30、9/24 互异,27 项通过,攻击药水回归 35 项通过 |
 | PARRYING_SHIELD | 已验收 | 格挡≥10 触发:审计前缀 DEFEND+IRON_WAVE+EndTurn,逐样本敌方 HP 19/30、25/24 互异,27 项通过 |

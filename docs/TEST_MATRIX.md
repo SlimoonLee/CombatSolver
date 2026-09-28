@@ -21,10 +21,12 @@
 |---|---|---|
 | `blind-forgotten-soul.json`（余烬触发遗忘之魂，双敌） | Passed 26 项：逐样本敌方 HP 互异（11/30、12/29）、原生完整对账 | `audit-forgotten-soul` |
 | `blind-tingsha.json`（准备触发铜钹，双敌） | Passed 26 项：逐样本敌方 HP 互异（27/30、30/27）、原生完整对账 | `audit-tingsha` |
+| `blind-kusarigama.json`（三攻击跨越计数器触发锁镰） | Passed 27 项：逐样本敌方 HP 互异（3/30、9/24）、攻击药水回归 35 项 | `audit-kusarigama` |
+| `blind-parrying-shield.json`（DEFEND+IRON_WAVE+EndTurn 触发招架盾） | Passed 27 项：逐样本敌方 HP 互异（19/30、25/24）、原生完整对账 | `audit-parrying-shield` |
 | 选择策略改动回归 | 发现 26 项、攻击药水 35 项通过 | `audit-regress4-*` |
 | Windows 结构门禁 | `REFACTOR_BOUNDARIES_OK search_files=241` | 本轮命令输出 |
 
-大帽子/橙色团块（缺 AfterSideTurnStart 分发面）、工具箱（turn1 时序在根捕获前）、锁镰（三攻击触发形状）的边界记录见报告。
+大帽子/橙色团块/工具箱为 turn≤1 时序（触发在盲根捕获前，镜像已在回合推进 switch，勘误见报告）；低语耳环保持边界。锁镰与招架盾已补验收。
 
 ## 机制族扫尾验收（2026-09-29 第三批）
 
