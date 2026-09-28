@@ -48,11 +48,19 @@ internal static class BlindAuditChecks
         SimulationSnapshot Replay(CombatRootSnapshot source, params PlanAction[] prefix)
             => new CombatBeamSolver(source, names, damage, policy)
                 .ReplayBlindAuditForTesting(prefix, AuditChoicePolicy);
-        // The audit's semantic oracle picks the first generated candidate, matching the native
-        // FirstVisibleCardSelector, so generated-choice cards (Discovery family) reconcile.
+        // The audit's semantic oracle picks the first candidate in the request's own option order,
+        // matching the native FirstVisibleCardSelector, so generated-choice cards (Discovery
+        // family) and hand discards (Prepared under Tingsha) reconcile.
         PlanCardChoice? AuditChoicePolicy(TurnStartChoiceRequest request)
         {
             if (request.Spec == null) return null;
+            if (request.Spec.Options.Count > 0)
+                return CardChoiceSupport.BuildRequestedChoice(request.Spec, ["__FIRST__"]) with
+                {
+                    SourceId = request.SourceId,
+                    ContextId = request.ContextId,
+                    Timing = request.Timing,
+                };
             var choices = CardChoiceSupport.BuildChoices(request.Spec, names,
                 policy.Profile.MaxPileChoiceBranchesPerAction, policy.Profile.MaxHandChoiceBranchesPerAction);
             var choice = choices.FirstOrDefault(item => item.Cards.Count > 0) ?? choices.FirstOrDefault();
@@ -87,7 +95,7 @@ internal static class BlindAuditChecks
                 string[] auditedCards =
                     ["STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
                      "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
-                     "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING"];
+                     "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
                 command = auditedId == null
                     ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
@@ -100,7 +108,7 @@ internal static class BlindAuditChecks
             }
             Check(command.CardId is "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
-                or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING"
+                or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
                 || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION"
                     or "OROBIC_ACID" or "SNECKO_OIL" or "ENTROPIC_BREW" or "COSMIC_CONCOCTION"
                 || (command.Kind == PlanActionKind.EndTurn && string.IsNullOrEmpty(command.CardId)),
@@ -321,8 +329,10 @@ internal static class BlindAuditChecks
         public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
         {
             CardModel[] cards = options.ToArray();
-            if (maxSelect != 1 || minSelect > 1 || cards.Length != 3)
-                throw new NotSupportedException("Audit expects a visible potion three-card choice.");
+            // Potion reconciliations present exactly three cards; discard triggers (e.g. Prepared
+            // under Tingsha) present an arbitrary hand with min=max=1. Both pick the first card.
+            if (maxSelect != 1 || minSelect > 1 || (cards.Length != 3 && minSelect != 1))
+                throw new NotSupportedException("Audit expects a single-pick visible choice.");
             Options = cards.Select(CardChoiceSupport.ChoiceCardKey).ToArray();
             Selected = [CardChoiceSupport.ChoiceCardKey(cards[0])];
             return Task.FromResult<IEnumerable<CardModel>>([cards[0]]);

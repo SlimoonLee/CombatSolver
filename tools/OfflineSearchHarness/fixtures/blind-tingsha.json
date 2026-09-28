@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-TINGSHA-AUDIT",
+  "characterId": "SILENT",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [30, 30],
+  "clearPlayerPiles": true,
+  "relics": [{ "relicId": "TINGSHA" }],
+  "cards": [
+    { "cardId": "PREPARED", "pile": "Hand" },
+    { "cardId": "STRIKE_SILENT", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_SILENT", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_SILENT", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_SILENT", "pile": "Draw", "count": 3 }
+  ]
+}

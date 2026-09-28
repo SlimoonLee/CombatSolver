@@ -1,5 +1,18 @@
 # CombatSolver 测试清单
 
+## 遗物 Hook 验收（2026-09-29 第四批）
+
+配置与边界见[遗物 Hook 验收](strategy/blind-rng-relics-20260929.md)。零行为源码改动；审计回放选择策略对齐原生第一张。
+
+| 场景 | 结果 | 证据 |
+|---|---|---|
+| `blind-forgotten-soul.json`（余烬触发遗忘之魂，双敌） | Passed 26 项：逐样本敌方 HP 互异（11/30、12/29）、原生完整对账 | `audit-forgotten-soul` |
+| `blind-tingsha.json`（准备触发铜钹，双敌） | Passed 26 项：逐样本敌方 HP 互异（27/30、30/27）、原生完整对账 | `audit-tingsha` |
+| 选择策略改动回归 | 发现 26 项、攻击药水 35 项通过 | `audit-regress4-*` |
+| Windows 结构门禁 | `REFACTOR_BOUNDARIES_OK search_files=241` | 本轮命令输出 |
+
+大帽子/橙色团块（缺 AfterSideTurnStart 分发面）、工具箱（turn1 时序在根捕获前）、锁镰（三攻击触发形状）的边界记录见报告。
+
 ## 机制族扫尾验收（2026-09-29 第三批）
 
 配置与评分范围、最终覆盖矩阵与剩余范围见[机制族扫尾验收](strategy/blind-rng-family-completion-20260929.md)。本批含行为源码改动：新增弹跳药瓶 Mirror（随机目标通道唯一语义缺口）及 Testing 层审计选择策略参数；Mod 已同源码部署。
