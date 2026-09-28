@@ -1,5 +1,8 @@
 # CombatSolver 测试清单
 
+## 怪物私有字段可见性白名单审计（2026-09-29 晚）
+架构第 1 步的审计交付（纯文档，零代码）：逐枚举 `BranchMonsterAi.Capture` 与散点私有读取点的全部字段并分类——无隐藏未来进入决策；五个公开事件可推导计数（知识恶魔诅咒/多重利爪追加/复活/召唤冷却/呼叫计数）的直读实现登记为独立严格化任务。见[可见字段白名单审计](strategy/blind-visibility-whitelist-20260929.md)。
+
 ## 随机怪物分组代表（2026-09-29 晚）
 来源清单与分组见[随机怪物来源清单](strategy/blind-rng-monsters-20260929.md);MonsterMoveChecks 严格差分,夹具 tools/OfflineSearchHarness/fixtures/monster-moves-random-*.json。
 | 组 | 代表 | 结果 |
