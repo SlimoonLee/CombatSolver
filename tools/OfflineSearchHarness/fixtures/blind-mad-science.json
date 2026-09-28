@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-MAD-SCIENCE-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [30, 30],
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "MAD_SCIENCE", "pile": "Hand", "enumMembers": { "TinkerTimeType": "Skill", "TinkerTimeRider": "Chaos" } },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}

@@ -96,7 +96,7 @@ internal static class BlindAuditChecks
                     ["DUALCAST", "MULTI_CAST", "QUADCAST", "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
                      "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
                      "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED",
-                     "JACKPOT", "MANIFEST_AUTHORITY"];
+                     "JACKPOT", "MANIFEST_AUTHORITY", "MAD_SCIENCE"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
                 command = auditedId == null
                     ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
@@ -110,7 +110,7 @@ internal static class BlindAuditChecks
             Check(command.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
-                or "JACKPOT" or "MANIFEST_AUTHORITY"
+                or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
                 || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION"
                     or "OROBIC_ACID" or "SNECKO_OIL" or "ENTROPIC_BREW" or "COSMIC_CONCOCTION"
                 || (command.Kind == PlanActionKind.EndTurn && string.IsNullOrEmpty(command.CardId)),

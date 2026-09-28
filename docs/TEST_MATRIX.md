@@ -7,11 +7,11 @@
 | 场景 | 结果 | 证据 |
 |---|---|---|
 | `blind-pool-jackpot.json` | Passed 9 项：自身伤害故无斩杀反例，矩阵与重观察 | `jackpot` |
-| `blind-pool-manifest-authority.json` | Passed 12 项：重锤零损击杀胜出 | `manifest-authority` |
-| audit 大奖/君权自授/二连/多连/四连 | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
+| `blind-pool-manifest-authority.json`、`blind-pool-mad-science.json` | 各 Passed 12 项：重锤零损击杀胜出 | `manifest-authority`、`mad-science` |
+| audit 大奖/君权自授/二连/多连/四连/疯狂科学Chaos | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
 | 球状闪电回归（前缀重构） | Passed 26 项 | `audit-regress5-bl` |
 
-慷慨捐助（AnyAlly 单局不适用）、疯狂科学（骑手分支矩阵）、多连/四连（模式已建立待补夹具）边界见报告。
+慷慨捐助（AnyAlly 单局不适用）边界见报告；疯狂科学 Chaos 骑手与多连/四连已补验收。
 
 ## 遗物 Hook 验收（2026-09-29 第四批）
 

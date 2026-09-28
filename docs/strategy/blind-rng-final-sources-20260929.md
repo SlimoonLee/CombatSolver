@@ -21,4 +21,8 @@
 | 来源 | 状态 | 理由 |
 |---|---|---|
 | LARGESSE(慷慨捐助) | 不适用 | 目标为 AnyAlly,单局无队友,夹具无法构造合法目标;属多人语义,按仓库单人硬约束不做分支 |
-| MAD_SCIENCE(疯狂科学) | 缺验收 | TinkerTime 类型/骑手决定效果分支(含 Chaos 尾巴的随机生成),Mirror 在位但效果矩阵需按骑手逐分支夹具,单独批次 |
+
+## 疯狂科学骑手补充(同日)
+
+骑手经 `EnumMembers` 注入(`TinkerTimeType=Skill`、`TinkerTimeRider=Chaos`)验收:policy 12 项(重锤零损击杀反例胜出)+ audit 26 项(Chaos 骑手的随机生成五样本互异:BLOODLETTING/UNMOVABLE/FEEL_NO_PAIN/HELLRAISER/HOWL_FROM_BEYOND,格挡 8 与免费入手一致),原生完整对账通过。其余骑手(Sapping/Violence/Choking/Energized/Wisdom/Expertise/Curious/Improvement)均为确定效果,不属随机因素验收范围;`MockedChaosCard` 测试后门未使用。
+| MAD_SCIENCE(疯狂科学) | 已验收(Chaos 骑手) | 其余骑手为确定效果,见骑手补充章节 |
