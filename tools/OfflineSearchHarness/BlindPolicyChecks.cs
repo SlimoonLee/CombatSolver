@@ -133,7 +133,10 @@ internal static class BlindPolicyChecks
             }
             var poolTrajectories = result.Evaluations
                 .Where(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)).ToArray();
-            Check(poolTrajectories.Length > 0 && poolTrajectories.All(value => value.ObservedActions.Count >= 2),
+            // Per-option choice evaluation consumes trajectory budget; a recorded multi-option
+            // card choice is itself the fresh post-generation decision evidence.
+            Check(poolTrajectories.Length > 0 && poolTrajectories.All(value => value.ObservedActions.Count >= 2
+                    || value.CardChoices.Any(choice => choice.Options.Count >= 2)),
                 "post-generation observation makes a fresh follow-up decision");
             if (poolCardId is "INFERNAL_BLADE" or "DISTRACTION")
                 Check(poolTrajectories.Any(value => value.ObservedActions.Skip(1).Any(

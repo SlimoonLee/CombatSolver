@@ -370,8 +370,6 @@ internal static class BlindAuditChecks
                 : colorlessIds.Contains(card.Id.Entry);
 
             var openingHand = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards;
-                string.Join(',', openingHand.Select(card => card.Preview.Id.Entry)) +
-                " colorless=" + string.Join(',', colorlessIds.Take(8)));
             // The root captures after the turn's draw, so the opening hand mixes generated cards
             // with drawn ones; filter by the relic's pool instead of counting the hand.
             var generatedOpening = openingHand.Where(IsGenerated).ToList();
@@ -396,7 +394,6 @@ internal static class BlindAuditChecks
                 // Ethereal generated cards exhaust at end of turn (Big Hat), colorless ones survive
                 // (Orange Dough); either way the later-turn zone count proves no re-generation.
                 int expectedGeneratedLater = bigHat ? 0 : 2;
-                    string.Join(',', simState.Hand.Cards.Select(card => card.Preview.Id.Entry)));
                 Check(generatedInSimulation == expectedGeneratedLater,
                     "simulation does not re-run the turn-start generation on later turns (got " +
                     generatedInSimulation + ", expected " + expectedGeneratedLater + ")");
