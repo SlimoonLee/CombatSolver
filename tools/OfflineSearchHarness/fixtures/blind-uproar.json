@@ -1,0 +1,17 @@
+{
+  "scenarioId": "BLIND-UPROAR-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 57,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "UPROAR", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "TWIN_STRIKE", "pile": "Draw" },
+    { "cardId": "POMMEL_STRIKE", "pile": "Draw" },
+    { "cardId": "CLASH", "pile": "Draw" },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}
