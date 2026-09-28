@@ -1,0 +1,18 @@
+{
+  "scenarioId": "BLIND-DRAIN-POWER-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 57,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "DRAIN_POWER", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Discard" },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Discard" },
+    { "cardId": "BLUDGEON", "pile": "Discard" },
+    { "cardId": "DEMON_FORM", "pile": "Discard" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}

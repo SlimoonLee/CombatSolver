@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-THRASH-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 57,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "THRASH", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand" },
+    { "cardId": "BLUDGEON", "pile": "Hand" },
+    { "cardId": "TWIN_STRIKE", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}

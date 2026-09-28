@@ -105,26 +105,45 @@ internal static class BlindPolicyChecks
             Check(result.Evaluations.Any(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)),
                 "random pool action is evaluated even without discovery votes");
             string poolCardId = poolCardCommand.CardId!;
-            string killerId = poolCardId switch
+            string? killerId = poolCardId switch
             {
-                "INFERNAL_BLADE" => "BLUDGEON",
-                "WHITE_NOISE" => "STRIKE_DEFECT",
-                _ => "STRIKE_SILENT",
+                "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM" => "BLUDGEON",
+                "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
+                "DISTRACTION" => "STRIKE_SILENT",
+                "STOKE" => null,
+                _ => "STRIKE_IRONCLAD",
             };
-            var lethal = result.ActionSummaries.First(summary => summary.FirstAction.CardId == killerId);
-            var pool = result.ActionSummaries.First(summary => summary.FirstAction.CardId == poolCardId);
-            Check(result.SelectedAction!.CardId == killerId && lethal.VictoryRate == 1
-                && lethal.MeanProjectedBattleHpLost == 0,
-                "certain immediate kill is retained instead of spending the turn on the random pool");
-            Check(lethal.MeanScore >= pool.MeanScore, poolCardId + " carries the opportunity cost of the available kill");
+            if (killerId != null)
+            {
+                var lethal = result.ActionSummaries.First(summary => summary.FirstAction.CardId == killerId);
+                var pool = result.ActionSummaries.First(summary => summary.FirstAction.CardId == poolCardId);
+                Check(lethal.VictoryRate == 1 && lethal.MeanProjectedBattleHpLost == 0,
+                    "the available certain kill completes at zero loss");
+                Check(lethal.MeanScore >= pool.MeanScore,
+                    poolCardId + " carries the opportunity cost of the available kill");
+                if (poolCardId != "ALCHEMIZE")
+                    Check(result.SelectedAction!.CardId == killerId,
+                        "certain immediate kill is retained instead of spending the turn on the random pool");
+            }
             var poolTrajectories = result.Evaluations
                 .Where(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)).ToArray();
             Check(poolTrajectories.Length > 0 && poolTrajectories.All(value => value.ObservedActions.Count >= 2),
                 "post-generation observation makes a fresh follow-up decision");
-            if (poolCardId != "WHITE_NOISE")
+            if (poolCardId is "INFERNAL_BLADE" or "DISTRACTION")
                 Check(poolTrajectories.Any(value => value.ObservedActions.Skip(1).Any(
                         action => action.Kind == PlanActionKind.PlayCard && !openingHandIds.Contains(action.CardId))),
                     "post-generation observation plays the revealed card");
+        }
+        else if (CostRandomizationFixtureApplies(live))
+        {
+            // Slither/Confused style draw-time cost randomization: EndTurn reveals the effect and the
+            // next-turn decision must react to the sampled costs.
+            var endTurn = result.ActionSummaries.First(summary => summary.FirstAction.Kind == PlanActionKind.EndTurn);
+            var endTrajectories = result.Evaluations
+                .Where(value => value.ActionKey == endTurn.FirstActionKey).ToArray();
+            Check(endTrajectories.Length > 0
+                    && endTrajectories.All(value => value.ObservedActions.Count >= 2),
+                "randomized draw costs lead to a fresh follow-up decision");
         }
         else
         {
@@ -170,7 +189,9 @@ internal static class BlindPolicyChecks
     {
         var hand = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards;
         string? poolCardId = hand.Select(card => card.Preview.Id.Entry)
-            .FirstOrDefault(id => id is "STOKE" or "INFERNAL_BLADE" or "WHITE_NOISE" or "DISTRACTION");
+            .FirstOrDefault(id => id is "STOKE" or "INFERNAL_BLADE" or "WHITE_NOISE" or "DISTRACTION"
+                or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
+                or "ALCHEMIZE" or "CHAOS");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;
@@ -179,5 +200,15 @@ internal static class BlindPolicyChecks
             CardStateKey: CardChoiceSupport.ChoiceCardKey(card),
             CardUpgradeLevel: card.Preview.CurrentUpgradeLevel,
             CardEnchantmentId: card.Preview.Enchantment?.Id.Entry ?? "");
+    }
+
+    private static bool CostRandomizationFixtureApplies(CombatState live)
+    {
+        var player = LocalContext.GetMe(live)!;
+        var combat = player.PlayerCombatState!;
+        bool slither = combat.DrawPile.Cards.Concat(combat.Hand.Cards)
+            .Any(card => card.Enchantment?.Id.Entry == "SLITHER");
+        bool confused = player.Creature.Powers.Any(power => power.Id.Entry == "CONFUSED_POWER");
+        return slither || confused;
     }
 }

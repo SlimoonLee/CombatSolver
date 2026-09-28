@@ -1,0 +1,13 @@
+{
+  "scenarioId": "BLIND-POOL-CHAOS-OPPORTUNITY-COST",
+  "characterId": "DEFECT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 6,
+  "initialPlayerEnergy": 1,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "CHAOS", "pile": "Hand" },
+    { "cardId": "STRIKE_DEFECT", "pile": "Hand", "count": 5 }
+  ]
+}

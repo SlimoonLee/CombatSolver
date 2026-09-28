@@ -69,10 +69,18 @@ internal static class BlindAuditChecks
             PotionModel? potion = player.PotionSlots.FirstOrDefault(p => p != null);
             if (potion == null)
             {
-                // Direct-generate-to-hand audits place exactly one audited pool card in the opening hand.
+                // Audited effects either place exactly one pool card in the opening hand, or (for
+                // draw-time cost randomization like Slither/Confused) let EndTurn reveal the effect.
                 var handIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards
                     .Select(card => card.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
-                command = Play(new[] { "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE" }.Single(handIds.Contains));
+                string[] auditedCards =
+                    ["STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
+                     "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
+                     "ALCHEMIZE", "CHAOS"];
+                string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
+                command = auditedId == null
+                    ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
+                    : Play(auditedId);
             }
             else
             {
@@ -80,7 +88,11 @@ internal static class BlindAuditChecks
                     PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
             }
             Check(command.CardId is "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
-                || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION" or "OROBIC_ACID",
+                or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
+                or "ALCHEMIZE" or "CHAOS"
+                || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION"
+                    or "OROBIC_ACID" or "SNECKO_OIL" or "ENTROPIC_BREW" or "COSMIC_CONCOCTION"
+                || (command.Kind == PlanActionKind.EndTurn && string.IsNullOrEmpty(command.CardId)),
                 "fixture contains one audited effect");
             PlanAction ResolveChoice(CombatRootSnapshot source)
             {
@@ -146,11 +158,24 @@ internal static class BlindAuditChecks
                     Check(Stamp(left, a) == Stamp(right, b), "full effect and RNG ignore real hidden inputs");
                     Check(a.Score == b.Score, "effect valuation ignores real hidden inputs");
                     var sim = (CombatPredictionSimulator)a.Simulator;
-                    string[] hand = sim.State.GetPlayerCombatState(player).Hand.Cards
+                    var simState = sim.State.GetPlayerCombatState(player);
+                    var simCombat = (SimulatedCombatState)sim.State.CombatState;
+                    string[] hand = simState.Hand.Cards
                         .Select(CardChoiceSupport.ChoiceCardKey).ToArray();
-                    string outcome = string.Join(";", hand) + ":" + action.Choice?.Cards.FirstOrDefault()?.CardId;
+                    // Randomness can land outside the hand: pile contents (upgrade/replay marks),
+                    // potion slots and orb types all differ per sample for the respective sources.
+                    string[] discard = simState.DiscardPile.Cards.Select(CardChoiceSupport.ChoiceCardKey)
+                        .OrderBy(key => key, StringComparer.Ordinal).ToArray();
+                    string[] drawPile = simState.DrawPile.Cards.Select(CardChoiceSupport.ChoiceCardKey)
+                        .OrderBy(key => key, StringComparer.Ordinal).ToArray();
+                    string[] slots = Enumerable.Range(0, player.PotionSlots.Count)
+                        .Select(slot => simCombat.GetPotionAtSlot(player, slot)?.Id.Entry ?? "-").ToArray();
+                    string[] orbs = simState.OrbQueue.Orbs.Select(orb => orb.Id.Entry).ToArray();
+                    string outcome = string.Join(";", hand) + "|" + string.Join(";", discard)
+                        + "|" + string.Join(";", drawPile) + "|" + string.Join(";", slots)
+                        + "|" + string.Join(";", orbs) + ":" + action.Choice?.Cards.FirstOrDefault()?.CardId;
                     sampledOutcomes.Add(outcome);
-                    evidence.Add(new { sampleSeed = seed, hand,
+                    evidence.Add(new { sampleSeed = seed, hand, discard, drawPile, slots, orbs,
                         selected = action.Choice?.Cards.Select(c => c.CardId).ToArray(),
                         boundary = a.BoundaryReason.ToString(), a.Score });
                     PlanAction exported = BlindCombatCommand.From(action);
@@ -159,7 +184,8 @@ internal static class BlindAuditChecks
                 }
                 finally { RestoreHiddenInputs(); a.ReleaseSimulator(); b?.ReleaseSimulator(); }
             }
-            Check(sampledOutcomes.Count > 1, "independent samples explore different generated outcomes");
+            Check(sampledOutcomes.Count > 1,
+                "independent samples explore different generated outcomes (count=" + sampledOutcomes.Count + ")");
             Check(ContinuationStamp.CaptureLive(live).StateText == liveBefore, "effect sampling leaves native state unchanged");
 
             // Deterministic native equality is a semantic oracle, separate from the blind decision.

@@ -1,0 +1,15 @@
+{
+  "scenarioId": "BLIND-ANOINTED-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "ANOINTED", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 7 },
+    { "cardId": "DEMON_FORM", "pile": "Draw" },
+    { "cardId": "IMPERVIOUS", "pile": "Draw" },
+    { "cardId": "JUGGERNAUT", "pile": "Draw" },
+    { "cardId": "BARRICADE", "pile": "Draw" }
+  ]
+}

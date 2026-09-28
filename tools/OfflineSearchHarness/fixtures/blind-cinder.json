@@ -1,0 +1,17 @@
+{
+  "scenarioId": "BLIND-CINDER-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 57,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "CINDER", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand" },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand" },
+    { "cardId": "BLUDGEON", "pile": "Hand" },
+    { "cardId": "DEMON_FORM", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}

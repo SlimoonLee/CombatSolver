@@ -1,0 +1,14 @@
+{
+  "scenarioId": "BLIND-CHAOS-AUDIT",
+  "characterId": "DEFECT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "CHAOS", "pile": "Hand" },
+    { "cardId": "STRIKE_DEFECT", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_DEFECT", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_DEFECT", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_DEFECT", "pile": "Draw", "count": 3 }
+  ]
+}
