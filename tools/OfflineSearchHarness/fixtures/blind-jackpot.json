@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-JACKPOT-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [40, 40],
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "JACKPOT", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 3 }
+  ]
+}

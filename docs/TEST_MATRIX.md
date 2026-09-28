@@ -1,5 +1,18 @@
 # CombatSolver 测试清单
 
+## 收尾来源验收（2026-09-29 第五批）
+
+配置与边界见[收尾来源验收](strategy/blind-rng-final-sources-20260929.md)。零行为源码改动；审计前缀按来源泛化（二连前置球状闪电）。
+
+| 场景 | 结果 | 证据 |
+|---|---|---|
+| `blind-pool-jackpot.json` | Passed 9 项：自身伤害故无斩杀反例，矩阵与重观察 | `jackpot` |
+| `blind-pool-manifest-authority.json` | Passed 12 项：重锤零损击杀胜出 | `manifest-authority` |
+| audit 大奖/君权自授/二连 | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、二连激发随机目标逐样本可辨（15/22→23/14→7/30）、原生完整对账 | `audit-*` |
+| 球状闪电回归（前缀重构） | Passed 26 项 | `audit-regress5-bl` |
+
+慷慨捐助（AnyAlly 单局不适用）、疯狂科学（骑手分支矩阵）、多连/四连（模式已建立待补夹具）边界见报告。
+
 ## 遗物 Hook 验收（2026-09-29 第四批）
 
 配置与边界见[遗物 Hook 验收](strategy/blind-rng-relics-20260929.md)。零行为源码改动；审计回放选择策略对齐原生第一张。

@@ -108,13 +108,14 @@ internal static class BlindPolicyChecks
             string? killerId = poolCardId switch
             {
                 "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM"
-                    or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH" or "METAMORPHOSIS" => "BLUDGEON",
+                    or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH" or "METAMORPHOSIS"
+                    or "MANIFEST_AUTHORITY" => "BLUDGEON",
                 "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
                 "DISTRACTION" => "STRIKE_SILENT",
-                // THRASH/BALL_LIGHTNING: the pool card itself deals damage, so no certain-kill
-                // counter-example is asserted; BALL_LIGHTNING also needs a two-enemy fixture for
-                // its end-of-turn random target, where a one-command kill cannot complete.
-                "STOKE" or "THRASH" or "BALL_LIGHTNING" => null,
+                // THRASH/JACKPOT/BALL_LIGHTNING: the pool card itself deals damage, so no
+                // certain-kill counter-example is asserted; BALL_LIGHTNING also needs a two-enemy
+                // fixture for its end-of-turn random target, where a one-command kill cannot complete.
+                "STOKE" or "THRASH" or "BALL_LIGHTNING" or "JACKPOT" => null,
                 _ => "STRIKE_IRONCLAD",
             };
             if (killerId != null)
@@ -197,7 +198,8 @@ internal static class BlindPolicyChecks
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING"
                 or "BUNDLE_OF_JOY" or "METAMORPHOSIS"
-                or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH");
+                or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH"
+                or "JACKPOT" or "MANIFEST_AUTHORITY");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;

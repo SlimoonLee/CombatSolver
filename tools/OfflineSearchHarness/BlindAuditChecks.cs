@@ -93,9 +93,10 @@ internal static class BlindAuditChecks
                 var handIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards
                     .Select(card => card.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
                 string[] auditedCards =
-                    ["STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
+                    ["DUALCAST", "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
                      "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
-                     "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED"];
+                     "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED",
+                     "JACKPOT", "MANIFEST_AUTHORITY"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
                 command = auditedId == null
                     ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
@@ -106,9 +107,10 @@ internal static class BlindAuditChecks
                 command = new(PlanActionKind.UsePotion, root.StartTurnNumber,
                     PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
             }
-            Check(command.CardId is "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
+            Check(command.CardId is "DUALCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
+                or "JACKPOT" or "MANIFEST_AUTHORITY"
                 || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION"
                     or "OROBIC_ACID" or "SNECKO_OIL" or "ENTROPIC_BREW" or "COSMIC_CONCOCTION"
                 || (command.Kind == PlanActionKind.EndTurn && string.IsNullOrEmpty(command.CardId)),
@@ -135,11 +137,29 @@ internal static class BlindAuditChecks
             var draw = player.PlayerCombatState!.DrawPile;
             CardModel[] savedDraw = draw.Cards.ToArray();
             string liveBefore = ContinuationStamp.CaptureLive(live).StateText;
-            // Channel-then-turn-end effects (lightning orb passive strikes a random enemy at end of
-            // turn) need the EndTurn suffix to reach the random part of the audited effect.
+            // Some audited effects need context commands before or after the audited one: lightning
+            // orb passives strike at end of turn; Dualcast evokes a lightning orb channeled first.
             bool channelsThenTurnEnd = command.Kind == PlanActionKind.PlayCard && command.CardId == "BALL_LIGHTNING";
             PlanAction endTurnCommand = new(PlanActionKind.EndTurn, root.StartTurnNumber);
-            PlanAction[] Prefix(PlanAction first) => channelsThenTurnEnd ? [first, endTurnCommand] : [first];
+            PlanAction[] Prefix(CombatRootSnapshot source, PlanAction first)
+            {
+                if (channelsThenTurnEnd) return [first, endTurnCommand];
+                if (first.Kind == PlanActionKind.PlayCard && first.CardId == "DUALCAST")
+                {
+                    var ball = source.ForkSimulator().State.GetPlayerCombatState(player).Hand.Cards
+                        .Single(c => c.Preview.Id.Entry == "BALL_LIGHTNING");
+                    return [first with
+                    {
+                        CardId = "BALL_LIGHTNING",
+                        TargetIndex = 0,
+                        TargetCombatId = source.Enemies[0].CombatId,
+                        CardStateKey = CardChoiceSupport.ChoiceCardKey(ball),
+                        CardUpgradeLevel = ball.Preview.CurrentUpgradeLevel,
+                        CardEnchantmentId = ball.Preview.Enchantment?.Id.Entry ?? "",
+                    }, first];
+                }
+                return [first];
+            }
             void AlterHiddenInputs()
             {
                 foreach (RunRngType stream in CombatStreams)
@@ -170,7 +190,7 @@ internal static class BlindAuditChecks
                 Check(left.ContinuationStamp.StateText == right.ContinuationStamp.StateText,
                     "sample root ignores real hidden RNG and draw order");
                 PlanAction action = ResolveChoice(left);
-                SimulationSnapshot a = Replay(left, Prefix(action));
+                SimulationSnapshot a = Replay(left, Prefix(left, action));
                 SimulationSnapshot? b = null;
                 try
                 {
@@ -178,7 +198,7 @@ internal static class BlindAuditChecks
                     PlanAction other = ResolveChoice(right);
                     Check(JsonSerializer.Serialize(action, Program.Json) == JsonSerializer.Serialize(other, Program.Json),
                         "sample option choice ignores real hidden RNG");
-                    b = Replay(right, Prefix(other));
+                    b = Replay(right, Prefix(right, other));
                     Check(Stamp(left, a) == Stamp(right, b), "full effect and RNG ignore real hidden inputs");
                     Check(a.Score == b.Score, "effect valuation ignores real hidden inputs");
                     var sim = (CombatPredictionSimulator)a.Simulator;
@@ -217,16 +237,14 @@ internal static class BlindAuditChecks
 
             // Deterministic native equality is a semantic oracle, separate from the blind decision.
             PlanAction nativePlan = ResolveChoice(root);
-            SimulationSnapshot expected = Replay(root, Prefix(nativePlan));
+            SimulationSnapshot expected = Replay(root, Prefix(root, nativePlan));
             try
             {
                 string projected = Stamp(root, expected);
                 var selector = new FirstVisibleCardSelector();
                 using (CardSelectCmd.PushSelector(selector, localOnly: true))
-                {
-                    ExecuteNative(live, BlindCombatCommand.From(nativePlan), loop);
-                    if (channelsThenTurnEnd) ExecuteNative(live, endTurnCommand, loop);
-                }
+                    foreach (PlanAction prefixCommand in Prefix(root, nativePlan))
+                        ExecuteNative(live, BlindCombatCommand.From(prefixCommand), loop);
                 ContinuationStamp actual = ContinuationStamp.CaptureLive(live);
                 Check(projected == actual.StateText, "native effect matches full predicted continuation including RNG");
                 evidence.Add(new { native = true, selector.Options, selector.Selected,

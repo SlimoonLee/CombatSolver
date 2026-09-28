@@ -1,0 +1,17 @@
+{
+  "scenarioId": "BLIND-DUALCAST-AUDIT",
+  "characterId": "DEFECT",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-random-effects-20260929",
+  "initialEnemyCurrentHps": [30, 30],
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "BALL_LIGHTNING", "pile": "Hand" },
+    { "cardId": "DUALCAST", "pile": "Hand" },
+    { "cardId": "STRIKE_DEFECT", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_DEFECT", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_DEFECT", "pile": "Draw", "count": 3 },
+    { "cardId": "DEFEND_DEFECT", "pile": "Draw", "count": 3 }
+  ]
+}
