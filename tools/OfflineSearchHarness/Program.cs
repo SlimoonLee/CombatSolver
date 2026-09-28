@@ -4,12 +4,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CombatSolver;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands;
 
 namespace OfflineSearchHarness;
 
 internal static class Program
 {
-    private static readonly JsonSerializerOptions Json = new()
+    internal static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -52,6 +53,17 @@ internal static class Program
         string reached = "none";
         int exitCode = 0;
         IDisposable? choiceScope = null;
+        IDisposable? observedChoiceScope = null;
+        Stopwatch requestWatch = Stopwatch.StartNew();
+        TimeSpan RequestTimeout(int phaseLimitSeconds)
+        {
+            TimeSpan phaseLimit = TimeSpan.FromSeconds(phaseLimitSeconds);
+            if (!options.PlayCombat) return phaseLimit;
+            TimeSpan remaining = TimeSpan.FromSeconds(options.CombatTimeoutSeconds) - requestWatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+                throw new TimeoutException("Native rollout request deadline exhausted.");
+            return remaining < phaseLimit ? remaining : phaseLimit;
+        }
         try
         {
             MainLoopContext loop = new();
@@ -70,8 +82,37 @@ internal static class Program
             GeneratedScenarioSetup? generated = null;
             UnattendedTestRunner.OfflineScenarioSession? session = null;
             CombatState? combat = null;
+            ObservedCardSelector? observedSelector = null;
+            HistoryCombatSetup? history = null;
+            if (options.PlayCombat || options.HistoryRunPath != null)
+            {
+                observedSelector = new ObservedCardSelector(options.NativeChoicePolicy);
+                observedChoiceScope = CardSelectCmd.PushSelector(observedSelector, localOnly: true);
+            }
 
-            if (options.RequestPath != null)
+            if (options.RunSavePath != null || options.CombatReplayPath != null || options.HistoryRunPath != null)
+            {
+                session = UnattendedTestRunner.OfflineScenarioSession.Create(new UnattendedTestRequest());
+                Step(steps, "S1.1 从玩家原生材料进入战斗", () =>
+                {
+                    TimeSpan importTimeout = RequestTimeout(30);
+                    if (options.HistoryRunPath != null)
+                    {
+                        history = new HistoryCombatSetup(options.HistoryRunPath, observedSelector!);
+                        loop.RunUntilCompleted(history.EnterFirstAsync(), importTimeout, "native history prefix");
+                        payload["historyGuidance"] = history.Guidance;
+                    }
+                    else
+                    {
+                        Task<object> entering = SavedCombatSetup.EnterAsync(options);
+                        loop.RunUntilCompleted(entering, importTimeout, "native save import");
+                        payload["saveImport"] = entering.GetAwaiter().GetResult();
+                    }
+                    combat = OfflineCombat.WaitForPlayableCombat(loop, RequestTimeout(120));
+                    return OfflineCombat.DescribeRoot(combat);
+                });
+            }
+            else if (options.RequestPath != null)
             {
                 Step(steps, "G1.1 解析生成场景请求", () =>
                 {
@@ -91,35 +132,45 @@ internal static class Program
 
                 Step(steps, "G1.2 建跑局、注入装备、进遭遇战房间", () =>
                 {
+                    TimeSpan enterTimeout = RequestTimeout(300);
                     Task<IDisposable?> enter = generated!.EnterCombatRoomAsync();
-                    loop.RunUntilCompleted(enter, TimeSpan.FromSeconds(300), "生成场景进房");
+                    loop.RunUntilCompleted(enter, enterTimeout, "生成场景进房");
                     choiceScope = enter.GetAwaiter().GetResult();
                     return $"pumped={loop.PumpedCallbacks}";
                 });
                 Step(steps, "G1.3 推进到玩家第一回合", () =>
                 {
-                    combat = OfflineCombat.WaitForPlayableCombat(loop);
+                    combat = OfflineCombat.WaitForPlayableCombat(loop, RequestTimeout(120));
                     generated!.CaptureOpening(combat);
                     if (!generated.Request.PreserveNativeCombatStateForTest)
+                    {
+                        TimeSpan injectTimeout = RequestTimeout(30);
                         loop.RunUntilCompleted(generated.Session.InjectInitialStateAsync(
                             combat, MegaCrit.Sts2.Core.Context.LocalContext.GetMe(combat)!),
-                            TimeSpan.FromSeconds(30), "固定夹具状态注入");
+                            injectTimeout, "固定夹具状态注入");
+                    }
                     return OfflineCombat.DescribeRoot(combat);
                 });
                 payload["setupChoices"] = generated.SetupChoices;
+                if (options.PlayCombat)
+                {
+                    choiceScope?.Dispose();
+                    choiceScope = null;
+                }
             }
             else
             {
                 session = UnattendedTestRunner.OfflineScenarioSession.Create(new UnattendedTestRequest());
                 Step(steps, "M1.1 建跑局并进入遭遇战房间", () =>
                 {
+                    TimeSpan enterTimeout = RequestTimeout(180);
                     Task enter = OfflineCombat.EnterCombatRoomAsync(options.Scenario);
-                    loop.RunUntilCompleted(enter, TimeSpan.FromSeconds(180), "EnterRoomDebug");
+                    loop.RunUntilCompleted(enter, enterTimeout, "EnterRoomDebug");
                     return $"pumped={loop.PumpedCallbacks}";
                 });
                 Step(steps, "M1.2 推进到玩家第一回合", () =>
                 {
-                    combat = OfflineCombat.WaitForPlayableCombat(loop);
+                    combat = OfflineCombat.WaitForPlayableCombat(loop, RequestTimeout(120));
                     return OfflineCombat.DescribeRoot(combat);
                 });
             }
@@ -136,7 +187,7 @@ internal static class Program
             File.WriteAllText(Path.Combine(options.OutputDirectory, "root-diagnostics.txt"), diagnostics);
             WriteProgress(options, "M1", "ok", "已到达玩家第一回合");
 
-            if (options.Milestone != "M1")
+            if (options.Milestone != "M1" && !options.PlayCombat)
             {
                 ModRuntime.SearchOutcome? outcome = null;
                 using MemorySampler memory = new(TimeSpan.FromMilliseconds(100));
@@ -197,6 +248,60 @@ internal static class Program
                     AncillaryFailureChecks.Run(outcome.Result, options.OutputDirectory);
                 WriteProgress(options, "M2", "ok", "搜索完成并产出指标");
             }
+            if (options.PlayCombat)
+            {
+                List<CombatRolloutResult> rollouts = [];
+                payload["rollouts"] = rollouts;
+                Step(steps, "M3 原生命令逐步执行与未知 RNG 重观察", () =>
+                {
+                    int count = history == null ? 1 : options.HistoryCombatLimit;
+                    for (int index = 0; index < count; index++)
+                    {
+                        TimeSpan combatTimeout = RequestTimeout(options.CombatTimeoutSeconds);
+                        string directory = Path.Combine(options.OutputDirectory, $"combat-{index:D2}");
+                        Directory.CreateDirectory(directory);
+                        HarnessOptions combatOptions = options with { OutputDirectory = directory };
+                        CombatRolloutResult rollout = CombatRollout.Run(combat!, combatOptions, loop, session!, observedSelector!, combatTimeout);
+                        rollouts.Add(rollout);
+                        File.WriteAllText(Path.Combine(options.OutputDirectory, "rollout-summary.json"),
+                            JsonSerializer.Serialize(new { nativeChoicePolicy = options.NativeChoicePolicy,
+                                reobserveAfterEveryCommand = true, rollouts, historyGuidance = history?.Guidance }, Json));
+                        if (rollout.Status != "Victory")
+                        {
+                            payload["rolloutStopReason"] = rollout.Status;
+                            exitCode = rollout.Status == "Defeat" ? 1 : 3;
+                            break;
+                        }
+                        if (history != null)
+                        {
+                            TimeSpan rewardTimeout = RequestTimeout(10);
+                            loop.RunUntilCompleted(history.TakeRewardsAsync(), rewardTimeout, "historical native rewards");
+                            File.WriteAllText(Path.Combine(options.OutputDirectory, "history-guidance.json"),
+                                JsonSerializer.Serialize(history.Guidance, Json));
+                            if (index + 1 < count)
+                            {
+                                TimeSpan nextTimeout = RequestTimeout(15);
+                                Task<bool> next = history.EnterNextAsync();
+                                loop.RunUntilCompleted(next, nextTimeout, "historical next combat");
+                                if (!next.Result) { payload["historyStopReason"] = history.StopReason; exitCode = 3; break; }
+                                combat = OfflineCombat.WaitForPlayableCombat(loop, RequestTimeout(120));
+                            }
+                        }
+                    }
+                    payload["nativeChoices"] = observedSelector!.Choices;
+                    return string.Join(", ", rollouts.Select(rollout => $"{rollout.Encounter}:{rollout.Status} decisions={rollout.Decisions} hp={rollout.StartHp}->{rollout.EndHp}"));
+                });
+                reached = "M3";
+            }
+        }
+        catch (TimeoutException error) when (options.PlayCombat
+            && requestWatch.Elapsed.TotalSeconds >= options.CombatTimeoutSeconds)
+        {
+            payload["rolloutStopReason"] = "TimeLimit";
+            payload["error"] = new { type = error.GetType().FullName, message = error.Message };
+            WriteProgress(options, NextMilestone(reached), "held", error.Message);
+            Console.Error.WriteLine($"[HELD] {error.Message}");
+            exitCode = 3;
         }
         catch (Exception error)
         {
@@ -218,6 +323,7 @@ internal static class Program
         finally
         {
             choiceScope?.Dispose();
+            observedChoiceScope?.Dispose();
             ModRuntime.Session?.Dispose();
             ModRuntime.FlushDiagnostics();
         }
@@ -233,7 +339,7 @@ internal static class Program
             JsonSerializer.Serialize(new Dictionary<string, object?>
             {
                 ["label"] = options.Label,
-                ["status"] = exitCode == 0 ? "Passed" : "Failed",
+                ["status"] = exitCode == 0 ? "Passed" : exitCode == 3 ? "Held" : "Failed",
                 ["reachedMilestone"] = reached,
                 ["requestPath"] = options.RequestPath,
                 ["profile"] = options.Profile,
@@ -255,6 +361,10 @@ internal static class Program
                     ? search.GetValueOrDefault("continuations")
                     : null,
                 ["catalogFingerprint"] = payload.GetValueOrDefault("catalogFingerprint"),
+                ["saveImport"] = payload.GetValueOrDefault("saveImport"),
+                ["rollouts"] = payload.GetValueOrDefault("rollouts"),
+                ["historyStopReason"] = payload.GetValueOrDefault("historyStopReason"),
+                ["rolloutStopReason"] = payload.GetValueOrDefault("rolloutStopReason"),
 
                 ["error"] = payload.GetValueOrDefault("error"),
             }, UnattendedTestFiles.JsonOptions));
@@ -346,6 +456,15 @@ internal sealed record HarnessOptions
     public const string Usage = """
         用法：OfflineSearchHarness [选项]
           --request <path>       固定夹具或含 generatedScenarioPath 的无人测试请求 JSON
+          --run-save <path>      原生当前版本战前存档；内存恢复并进入已保存坐标
+          --combat-replay <path> 原生 .mcr 的战前存档（先核对模型编号表）
+          --history-run <path>   .run 指导的新局前缀；使用完整解锁，按已录类型取最低列相邻节点
+          --play-combat          执行未知 RNG 首命令并在每个稳定根重新求解
+          --history-combats <n>  历史前缀最多战斗数（1..4，默认 1）；遇非战斗/不符记录时停止
+          --combat-decisions <n> 整场决策上限（默认 200）
+          --combat-turns <n>     整场回合上限（默认 20）
+          --combat-timeout-seconds <n> 请求总时限（1..120，默认 120）
+          --native-choice-policy <p> Stop（默认）|FirstLegal（只按实际可见候选选最少张）
           --label <name>         本根标签（写进 result.json，默认 offline）
           --character <id>       角色（无 --request 时用，默认 IRONCLAD）
           --encounter <id>       遭遇（无 --request 时用，默认 FUZZY_WURM_CRAWLER_WEAK）
@@ -406,6 +525,15 @@ internal sealed record HarnessOptions
 
     public HarnessScenario Scenario { get; init; } = new("IRONCLAD", "FUZZY_WURM_CRAWLER_WEAK", "OFFLINEHARNESS1", 0, 0);
     public string? RequestPath { get; init; }
+    public string? RunSavePath { get; init; }
+    public string? CombatReplayPath { get; init; }
+    public string? HistoryRunPath { get; init; }
+    public bool PlayCombat { get; init; }
+    public int HistoryCombatLimit { get; init; } = 1;
+    public int CombatDecisionLimit { get; init; } = 200;
+    public int CombatTurnLimit { get; init; } = 20;
+    public int CombatTimeoutSeconds { get; init; } = 120;
+    public string NativeChoicePolicy { get; init; } = "Stop";
     public string Label { get; init; } = "offline";
     public string Profile { get; init; } = "Custom";
     public int? Beam { get; init; }
@@ -500,6 +628,10 @@ internal sealed record HarnessOptions
         string blindAggregation = "Majority";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
         string? output = null, requestPath = null;
+        string? runSavePath = null, combatReplayPath = null, historyRunPath = null;
+        bool playCombat = false;
+        int historyCombats = 1, combatDecisions = 200, combatTurns = 20, combatTimeout = 120;
+        string nativeChoicePolicy = "Stop";
         string workspace = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "../../../../../.local/offline-harness"));
         bool verbose = false;
@@ -516,6 +648,15 @@ internal sealed record HarnessOptions
             switch (key)
             {
                 case "--request": requestPath = Path.GetFullPath(Value()); break;
+                case "--run-save": runSavePath = Path.GetFullPath(Value()); break;
+                case "--combat-replay": combatReplayPath = Path.GetFullPath(Value()); break;
+                case "--history-run": historyRunPath = Path.GetFullPath(Value()); break;
+                case "--play-combat": playCombat = true; break;
+                case "--history-combats": historyCombats = int.Parse(Value()); break;
+                case "--combat-decisions": combatDecisions = int.Parse(Value()); break;
+                case "--combat-turns": combatTurns = int.Parse(Value()); break;
+                case "--combat-timeout-seconds": combatTimeout = int.Parse(Value()); break;
+                case "--native-choice-policy": nativeChoicePolicy = Value(); break;
                 case "--label": label = Value(); break;
                 case "--character": character = Value(); break;
                 case "--encounter": encounter = Value(); break;
@@ -583,6 +724,13 @@ internal sealed record HarnessOptions
         }
         if (milestone is not ("M1" or "M2"))
             throw new ArgumentException("--milestone 只接受 M1 或 M2。");
+        if (new[] { requestPath, runSavePath, combatReplayPath, historyRunPath }.Count(path => path != null) > 1)
+            throw new ArgumentException("--request、--run-save、--combat-replay、--history-run 只能选一个。");
+        if (playCombat && (blindSamples == 0 || blindKnownTop != 0 || milestone == "M1"))
+            throw new ArgumentException("--play-combat 需要 blind 模式、未知堆顶（0）及 M2；不接受固定堆顶知识跨动作传播。");
+        if (nativeChoicePolicy is not ("Stop" or "FirstLegal") || historyCombats is < 1 or > 4
+            || combatDecisions is < 1 or > 1000 || combatTurns is < 1 or > 100 || combatTimeout is < 1 or > 120)
+            throw new ArgumentException("无效的原生 rollout 选择政策或停止预算。");
         if (profile is not ("Low" or "Medium" or "High" or "VeryHigh" or "Custom"))
             throw new ArgumentException("--profile 只接受 Low|Medium|High|VeryHigh|Custom。");
         if (searchMode is not ("Evaluate" or "Coordinator"))
@@ -660,6 +808,15 @@ internal sealed record HarnessOptions
         {
             Scenario = new HarnessScenario(character, encounter, seed, ascension, actIndex),
             RequestPath = requestPath,
+            RunSavePath = runSavePath,
+            CombatReplayPath = combatReplayPath,
+            HistoryRunPath = historyRunPath,
+            PlayCombat = playCombat,
+            HistoryCombatLimit = historyCombats,
+            CombatDecisionLimit = combatDecisions,
+            CombatTurnLimit = combatTurns,
+            CombatTimeoutSeconds = combatTimeout,
+            NativeChoicePolicy = nativeChoicePolicy,
             Label = label,
             Profile = profile,
             Beam = beam,

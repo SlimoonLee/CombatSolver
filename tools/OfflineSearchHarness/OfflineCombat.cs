@@ -74,9 +74,9 @@ internal static class OfflineCombat
     /// 回合循环是 <c>AfterCombatRoomLoaded</c> 里 fire-and-forget 起来的，所以这里只能靠泵消息循环
     /// 把它推到「玩家出牌阶段」。判定条件与游戏内 <c>WaitForPlayableCombatAsync</c> 一致。
     /// </summary>
-    public static CombatState WaitForPlayableCombat(MainLoopContext loop)
+    public static CombatState WaitForPlayableCombat(MainLoopContext loop, TimeSpan? timeout = null)
     {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(120);
+        DateTime deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(120));
         while (true)
         {
             CombatState? state = CombatManager.Instance.DebugOnlyGetState();
@@ -127,7 +127,7 @@ internal static class OfflineCombat
         }
     }
 
-    private static TModel ResolveUnique<TModel>(IEnumerable<TModel> candidates, string input, string kind)
+    internal static TModel ResolveUnique<TModel>(IEnumerable<TModel> candidates, string input, string kind)
         where TModel : AbstractModel
     {
         TModel[] matches = candidates

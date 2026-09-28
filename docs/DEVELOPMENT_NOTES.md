@@ -8,7 +8,12 @@
 - 隔离验证在搜索完成后重新捕获 live 和冻结影子状态，分别与原 continuation 比较；不再用捕获时的两个旧戳相等证明未修改。`BlindSearchContracts` 的 121 项检查覆盖九条原生 RNG 序列、Fork 别名隔离、隐藏输入独立性、已知堆顶、选择去除和聚合反例。
 - 实跑 `CULTISTS_NORMAL` / IRONCLAD / 3 samples / 300 nodes / 3000 ms：Majority 的 DOP1 与 MeanScore 的 DOP2 均为 2 候选、6 次评估，首命令 BASH；排除耗时后，完整评估矩阵一致。零能量夹具为 1 候选、2 次评估、首命令 EndTurn；含 FIRE_POTION 的 DOP2/RiskAverse 夹具为 2 候选、6 次评估，药水首命令约束被实际执行。
 - Release 和宿主构建均为 0 警告/0 错误；Windows 结构门禁通过；原确定性 Coordinator 烟测通过，仍输出 14 个路线动作及根戳。证据位于外层工作区 `.local/blind-evidence-final`、`blind-evidence-parallel`、`blind-evidence-endturn`、`blind-evidence-potion` 和 `blind-evidence-deterministic`。
-- 当前是离线内部入口，未接在线 mid-combat 执行、选牌续接或真实 rollout 校准。样本内部仍按确定化未来自适应搜索，不能称为严格全分布或部分可观测最优策略；边界上的存活不等于整场存活。未运行 Linux 门禁、可见游戏或整场胜率验证；未提升版本或发布。
+- 本轮追加原生 `.save` / `.mcr` 战前材料入口和 `.run` 历史指导前缀；恢复后完整规范化 run 对账，仅将空遗物 props 与省略字段视为等价。只接受当前 schema，非空/未知 Mod 扩展和不可解码的模型编号表明确拒绝；测试保存后端始终为 `MemorySaveStore`。
+- `--play-combat` 通过原生出牌、用药、结束回合动作执行聚合首命令，等待动作完成和稳定 Play 后重新采样。`--native-choice-policy FirstLegal` 只处理实际可见候选，选最少张；战后选牌按历史实际奖励匹配。Mod 在线 UI 和采样选牌策略尚未接入。
+- 用户存档实跑 9 场胜利、150 条实际执行命令、0 次用药。当前 DEFECT A10 第三幕 `SCROLLS_OF_BITING_WEAK` 扣血 15；五角色历史前缀的八场扣血依次为 DEFECT 5/1、SILENT 2/4、NECROBINDER 1/0、IRONCLAD 3、REGENT 15。铁甲战后回血，HP 从 64 到 67，但原生伤害历史记实际扣血 3。八次战后选牌与历史记录一致，详见[原生 rollout 实测](strategy/blind-native-rollout-20260928.md)。
+- 150 条 selected/executed 对齐，根隔离检查全部为 true，候选×样本矩阵完整，部署命令均无样本选择/嵌套选择/下回合选择/预测遗物效果。历史指导前缀使用全解锁和最低列相邻坐标，不能证明与人工同根；部分战损高于人工历史，不声称质量等价。
+- 总时限改为精确剩余 TimeSpan，建局、领奖、下一场准备与搜索共用余量；耗尽后为 Held/TimeLimit。3 秒、64 samples、要求两场的最小截止边界在首场搜索中停止，0 条执行命令，未进入第二场。最终宿主构建 0 警告/0 错误、Windows 结构门禁通过。证据位于仓库 `.local/blind-native/`，原档与完整日志未提交。
+- `latest.mcr` 因缺少原模型编号映射且 hash 不匹配（F986C260 / 5D828510）未解码，不能用作精确人工对照。样本内部仍按确定化未来自适应搜索，不能称为严格全分布或部分可观测最优策略；边界上的存活不等于整场存活。未跑完整通关、Linux 门禁、可见游戏或统计胜率验证；未提升版本或发布。
 
 ## 0.47.1 回归修复（2026-09-27）
 

@@ -312,7 +312,8 @@ internal static class ModRuntime
         BattleDamageSnapshot damage,
         SearchPolicySnapshot basePolicy,
         HarnessOptions options,
-        out object describedPolicy)
+        out object describedPolicy,
+        CancellationToken cancellationToken)
     {
         BlindAggregationMode aggregation = Enum.Parse<BlindAggregationMode>(
             options.BlindAggregation, ignoreCase: true);
@@ -335,7 +336,7 @@ internal static class ModRuntime
             options.BudgetMilliseconds,
             options.BlindKnownTopDrawCards);
         return CombatSearchCoordinator.SolveBlind(
-            root, names, damage, policy, blindOptions, CancellationToken.None);
+            root, names, damage, policy, blindOptions, cancellationToken);
     }
 
     private static object DescribeBlindPolicy(BlindSearchResult result)
@@ -366,6 +367,7 @@ internal static class ModRuntime
         object? SolverMetrics,
         object Policy,
         object? BlindPolicy,
+        PlanAction? SelectedCommand,
         Dictionary<string, object?> LegacyMetrics,
         Dictionary<string, object?> RootCapture,
         string? RootContinuationStamp,
@@ -434,7 +436,8 @@ internal static class ModRuntime
         CombatState state,
         HarnessOptions options,
         MainLoopContext loop,
-        UnattendedTestRunner.OfflineScenarioSession? session)
+        UnattendedTestRunner.OfflineScenarioSession? session,
+        CancellationToken cancellationToken = default)
     {
         if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_PROBE_ROOT") == "1")
             ProbeRootCapture(state);
@@ -536,7 +539,7 @@ internal static class ModRuntime
             {
                 if (options.BlindSamples > 0)
                 {
-                    blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy);
+                    blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy, cancellationToken);
                     result = blindResult.RepresentativeResult;
                 }
                 else
@@ -556,7 +559,7 @@ internal static class ModRuntime
         {
             if (options.BlindSamples > 0)
             {
-                blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy);
+                blindResult = SolveBlind(root, names, damage, policy, options, out describedPolicy, cancellationToken);
                 result = blindResult.RepresentativeResult;
             }
             else
@@ -616,6 +619,7 @@ internal static class ModRuntime
             session?.CaptureSolverMetrics(result),
             describedPolicy,
             blindResult == null ? null : DescribeBlindPolicy(blindResult),
+            blindResult?.SelectedAction,
             BuildLegacyMetrics(result),
             rootCapture,
             blindResult == null ? root.ContinuationStamp.StateText : null,

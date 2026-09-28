@@ -3,11 +3,12 @@
 `tools/OfflineSearchHarness/` 是一个普通的 .NET 9 控制台程序：它加载 `sts2.dll` 但**不启动 Godot
 引擎**，用游戏自己的核心层建出一场战斗、推进到玩家第一回合，再在同一个进程里调
 `CombatRootSnapshot.Capture` 与 `CombatSearchCoordinator.Solve`（或单次 `CombatBeamSolver`）跑一次
-固定预算搜索，把指标、选中路线和搜索策略写成 JSON。
+固定预算搜索，把指标、选中路线和搜索策略写成 JSON。未知 RNG 模式还可以通过游戏自己的
+动作队列执行首命令，在实际结算后重新观察、重新采样，直到战斗结束或达到停止预算。
 
 它解决的是批量测量的成本问题：游戏内无人测试每一根都要起一次 Godot 进程，宿主不用，几十根到上百根
 的宽度/预算/保留规则对照可以在一台机器上连着跑。**它不是 `docs/HEADLESS_TESTING.md` 的替代**——
-正确性验收仍然走无人测试，宿主只覆盖「同一份 DLL、同一个根、只换搜索参数」这一类测量。
+完整 actual/simulated 正确性验收仍然走无人测试；宿主提供搜索测量和原生命令 rollout 的行为证据。
 
 ## 构建
 
@@ -38,6 +39,14 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 | 选项 | 含义 |
 |---|---|
 | `--request <path>` | 无人测试请求 JSON（含 `generatedScenarioPath`），走生成场景开局 |
+| `--run-save <path>` | 当前 schema 的原生战前 `.save`，规范化恢复核对后进入已保存坐标 |
+| `--combat-replay <path>` | `.mcr` 的原生战前存档；模型编号表 hash 必须一致 |
+| `--history-run <path>` | 单人 `.run` 指导的新局前缀，全解锁、按历史节点类型取最低列相邻坐标 |
+| `--play-combat` | 未知 RNG 首命令原生执行；每次动作稳定后重新求解 |
+| `--history-combats <n>` | 历史指导前缀最多 1..4 场，默认 1；遇非战斗边界停止 |
+| `--combat-decisions/--combat-turns` | 每场决策/回合上限，默认 200/20 |
+| `--combat-timeout-seconds <n>` | rollout 请求总时限，1..120 秒，默认 120；建局、战斗和领奖共用余量 |
+| `--native-choice-policy <p>` | `Stop`（默认）或 `FirstLegal`；后者按实际可见候选选最少张数 |
 | `--character/--encounter/--seed/--ascension/--act-index` | 不给 `--request` 时直接指定一个新跑局 |
 | `--profile` | `Low\|Medium\|High\|VeryHigh\|Custom`（默认 `Custom`），预设值问模组自己要 |
 | `--beam/--nodes/--card-branches/--pile-branches/--hand-branches` | 覆盖预设的宽度、节点上限与分支上限 |
@@ -78,11 +87,46 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
 
 `--budget-ms` 是每样本发现阶段的软预算，评估阶段另将同等预算按候选数平分；`--nodes` 仍应用于各次搜索。K 个样本、C 个候选会发起 K 次 Coordinator 和 K*C 次约束 Beam 请求，总工作量看 `blindPolicy.TotalExpandedNodes` / `TotalTransitionCount` / `Elapsed`。普通 `solverMetrics` / `pruneCounters` 属于代表样本，`metricScope=representative_sample`，不能当作采样总量。blind 模式不接受 `--production-budget`、`--observe-portfolio` 或 `--portfolio-model`。
 
-输出命令按 `Kind` 处理，可能是出牌、药水或 EndTurn。原 `PlanAction.IsExecutable` 仅表示卡牌/药水，不能用它过滤 blind 的 EndTurn。命令中的选择为空：发起动作后若出现选牌页，需要重新观察并选择；在下一个稳定决策点重新采样。当前宿主只求解开局的稳定 Play 根，尚未提供在线执行、任意 mid-combat 恢复或选牌续接协议。
+输出命令按 `Kind` 处理，可能是出牌、药水或 EndTurn。原 `PlanAction.IsExecutable` 仅表示卡牌/药水，不能用它过滤 blind 的 EndTurn。命令中的选择为空：发起动作后若出现选牌页，需要处理实际可见选择；在下一个稳定决策点重新采样。`--play-combat` 已覆盖原生动作后的稳定 Play 根；Mod 在线 UI、任意 mid-combat 存档恢复和采样选牌协议仍未接入。
 
 这属于有限候选的确定化采样；每个样本内部仍按该样本的未来优化。搜索未走到终局时，预计战损及存活只覆盖已搜索前缀，完整胜利比例也不是经真实 rollout 校准的胜率。需要保留 `BoundaryReason`，不能据此声称严格随机策略最优。
 
 可选设置 `OFFLINE_HARNESS_BLIND_CHECKS=1`，在本次根上运行 121 项采样、RNG/Fork 隔离和聚合合同并写出 `blind-checks.json`。可重跑的小夹具为 `tools/OfflineSearchHarness/fixtures/blind-endturn.json` 与 `blind-potion.json`；分别覆盖零能量 EndTurn 和药水首命令约束。这些合同验证 blind 入口，不替代完整游戏的原生差分。
+
+## 玩家存档与原生战斗推进
+
+```powershell
+dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
+    --run-save <current_run.save> --play-combat `
+    --search-mode Coordinator --blind-samples 3 --blind-seed 902828 `
+    --blind-aggregation MeanScore --beam 12 --nodes 300 --budget-ms 300 --dop 1 `
+    --native-choice-policy FirstLegal --combat-timeout-seconds 120 `
+    --out .local/blind-native/current
+```
+
+历史指导测试将 `--run-save <current_run.save>` 换成 `--history-run <history.run> --history-combats 2`。
+`--request`、`--run-save`、`--combat-replay`、`--history-run` 互斥；`--play-combat` 要求 blind 模式、
+M2 和 `--blind-known-top 0`，不将开局堆顶知识传播到后续动作。
+
+- `.save` 使用游戏 `SerializableRun`、`RunState.FromSerializable` 和 `SetUpSavedSingleplayer`。
+  地图生成后完整规范化序列化对账，只将无状态遗物的空 `props:{}` 与省略字段视为等价；
+  通过后用 `LoadIntoLatestMapCoord(null)` 继续，不重复记录坐标或重抽地图。
+- 仅接受当前 schema 的单人战前材料。空 BaseLib 卡牌 modifier 和明确列出的空 Loadout 元数据可忽略；
+  非空或未知扩展拒绝。宿主没有原存档的完整 Mod 栈，不能声称恢复了第三方玩法语义。
+- `.mcr` 只提取战前 run，不回放录制操作；没有原模型编号映射时，hash 不匹配会在解码前停止并保存头信息。
+- `.run` 没有完整地图坐标、解锁状态和逐张战斗操作。建局使用记录 seed/角色/幕/进阶，
+  选择记录中的远古之民选项，按相邻节点类型走路，核对遭遇，并在实际奖励候选中匹配历史选牌。
+  这是历史指导前缀，不能作为精确手操回放；非战斗节点、不可用奖励或遭遇不符均显式停止。
+- 原生执行使用 `PlayCardAction`、`UsePotionAction`、`EndPlayerTurnAction`，先等待具体动作完成，
+  再等待稳定 Play 或战斗结束；每条首命令后重新捕获根，样本选择和跨回合续用均不部署。
+- `Stop` 遇到需要决策的原生选牌会报告未支持；`FirstLegal` 只选实际候选中的前 `minSelect` 张，
+  是可见候选基线，不是未知 RNG 的采样选牌策略。战后选牌使用历史记录，不使用这条战斗内基线。
+- 建局、领奖、下一场准备和搜索共同扣除请求时限；耗尽后不启动下一条命令或下一场，
+  `result.json` 返回 `Held` 和 `rolloutStopReason=TimeLimit`。限制为协作式停止，不中断正在运行的单个同步结算。
+- 保存后端始终为游戏的 `MemorySaveStore`，不会写回玩家存档。这里没有 Godot 进程或游戏实例目录；
+  若使用 `run-unattended-test` 的 Godot 无头路径，仍须遵循其独立实例与清理规范。
+
+9 场原生战斗、奖励选择与人工历史差距见[本轮实测](strategy/blind-native-rollout-20260928.md)。
 
 ## 批量用法
 
@@ -116,6 +160,10 @@ plan 每项的字段：`label`（必填，简单目录名）、`request`（必�
 - `root-diagnostics.txt`：普通模式为 `SolverDiagnostics.DescribeStart` 的完整根描述；blind 模式只描述公开手牌、牌堆数量和当前战斗信息，不写隐藏抽牌顺序。
 - `search-policy.json`：这一次求解实际用的 `SearchPolicySnapshot`。
 - `harness-result.json`：上面全部加上分步时间线、绕过清单、补丁装载记录。
+- 存档入口的 `save-import.json` / `run.restored.json`：恢复身份及完整规范化 run；对账失败另写 `run.expected.json`。
+- rollout 的 `rollout-summary.json`：各场状态、HP、原生实际扣血、回合、决策和耗时；
+  `combat-NN/decisions.jsonl` 记录每条命令的 selected/executed、完整评估矩阵和实际选牌。
+  `history-guidance.json` 在战后领奖完成后更新，包含最后一场奖励与领奖后牌组。
 
 ## 口径
 
@@ -146,9 +194,12 @@ plan 每项的字段：`label`（必填，简单目录名）、`request`（必�
 |---|---|---|
 | `Logger.GetIsRunningFromGodotEditor`、`ConsoleLogPrinter.Print` | 不判编辑器、打到 `System.Console` | 无，只决定日志去向 |
 | `LocString.GetRawText/GetFormattedText/Exists` | 返回本地化键名 / `true` | 无，搜索不读文案（见下方限制） |
-| `PreloadManager.Load{Run,Act,RoomCombat}Assets` | `Task.CompletedTask` | 无，战斗建立不需要立绘与节点 |
+| `PreloadManager.Load{Run,Act,RoomCombat,RoomEvent}Assets` | `Task.CompletedTask` | 无，战斗/事件建立不需要立绘与节点 |
 | `NCombatRulesFtue.Create` | `null` | 无，与游戏内无人测试同语义 |
-| `MigrationRegistry.RegisterAllMigrations` | 跳过注册 | 无，离线不读存档 |
+| `NEventRoom.Create`、遗物提示、`NHoverTipSet.Clear`、控制器静态构造 | 不创建事件/提示节点或热键 | 只绕过显示；事件与奖励的原生核心逻辑仍执行 |
+| `MigrationRegistry.RegisterAllMigrations` | 跳过实例化，按 attribute 读取最新版本 | 只接受当前 schema，不迁移旧档 |
+| `UserDataPathProvider.GetPlatformDirectoryName`、`PlatformUtil.GetLocalPlayerId` | 固定内存存储身份 | 不访问玩家磁盘存档 |
+| `Godot.Time.GetTicksMsec` | `Stopwatch` 单调毫秒 | 保留原生命令的计时推进，无 Godot 原生层 |
 | `NGame.GetGameVersion`、`PlatformUtil.GetPlatformBranch/GetPlayerNameRaw` | 固定值 | 无，只进联机握手信息与显示名 |
 | `Godot.Node` 及其 304 个子类的静态构造 | 跳过 | 无，离线不建节点树 |
 
@@ -160,12 +211,12 @@ plan 每项的字段：`label`（必填，简单目录名）、`request`（必�
 - **本地化返回键名**：`LocManager.Initialize` 要用 `Godot.FileAccess` 读 `res://localization`，离线装的是
   一张空表，所有文案取到的是键名。显示字段（`cardTitle` / `targetName` / …）因此不能与游戏内直接比，
   `compare_results.py` 已把它们排除。搜索本身不读文案。
-- **只覆盖生成场景与新跑局**：`runSnapshotPath`、`replayStatePath`、`checkpointArchivePath` 这几条
-  「从存档/回放恢复战斗态」的入口没有接，宿主只能从新跑局或生成场景开局。
+- **不支持任意中途恢复**：宿主已接当前 schema 的原生战前 `.save` 与可解码 `.mcr`；
+  无人测试 `runSnapshotPath`、`replayStatePath`、`checkpointArchivePath` 的中途恢复协议仍未接入。
 - **RitsuLib 未初始化**：宿主装的是模组里与搜索正确性相关的那 13 个 Harmony 补丁，RitsuLib 自己的运行期
   初始化没跑。实测 30 根里有 2 根的探索量与游戏内不同，结论字段（选中路线、`score`、
   `projectedBattleHpLost`）相同。
-- **不做正确性验收**：宿主没有无人测试的断言体系，它只产指标。行为改动仍然要过
+- **不替代严格差分验收**：宿主有恢复对账、根隔离检查和原生命令 rollout，仍没有完整无人测试的断言体系。战斗语义改动仍然要过
   `docs/HEADLESS_TESTING.md` 的流程。
 
 ## 验证证据

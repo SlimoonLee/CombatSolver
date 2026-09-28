@@ -13,7 +13,25 @@
 | 确定性默认路径 | 同一普通新战斗，不给 blind 参数 / Coordinator / 300 nodes / 3000 ms / DOP1 | Passed：无 blind policy，根戳存在，14 个路线动作；仅烟测，不声称质量回归等价 | `blind-evidence-deterministic/harness-result.json` |
 | 构建/结构 | Release DLL + OfflineSearchHarness；Windows `verify-refactor-boundaries.ps1` | Passed：0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=213` | 本轮命令输出 |
 
-夹具位于 `tools/OfflineSearchHarness/fixtures/`；本轮证据目录位于外层工作区 `.local/`，未纳入提交。当前 blind 入口只覆盖离线宿主，合同不替代原生 actual/simulated 严格对拍。尚未执行在线 mid-combat Runtime、选择中间态重观察、完整 headless rollout、Linux 门禁或统计意义上的分布收敛验证。
+夹具位于 `tools/OfflineSearchHarness/fixtures/`；以上单步证据目录位于外层工作区 `.local/`，未纳入提交。合同不替代原生 actual/simulated 严格对拍。
+
+### 原生命令 rollout 与用户历史指导
+
+共同配置为 3 samples、MeanScore、blind seed 902828、Beam 12、300 nodes、每样本发现预算 300 ms、DOP1、FirstLegal、请求总时限 120 秒。证据位于本仓库 `.local/blind-native/`；原始存档与完整日志未纳入提交。
+
+| 场景 | 结果 | 证据目录 |
+|---|---|---|
+| 当前原生存档，DEFECT A10 第三幕 | Victory；74→59 HP、实际扣血 15、3 回合、14 决策；完整规范化 run 恢复核对通过 | `current-final` |
+| DEFECT 历史指导两战 | 两场 Victory；扣血 5/1、3/4 回合、12/13 决策；奖励 COOLHEADED/BOOST_AWAY 与历史匹配 | `defect-complete` |
+| SILENT 历史指导两战 | 两场 Victory；扣血 2/4、5/4 回合、20/17 决策；3 次原生战斗内选牌；奖励 CALCULATED_GAMBLE/FLICK_FLACK 匹配 | `silent-complete` |
+| NECROBINDER 历史指导两战 | 两场 Victory；扣血 1/0、10/5 回合、34/14 决策；奖励 DEATHBRINGER/COUNTDOWN 匹配 | `necro-complete` |
+| IRONCLAD 历史指导一战 | Victory；实际扣血 3、战后回复使 HP 64→67、3 回合、9 决策；奖励 POMMEL_STRIKE 匹配 | `ironclad-complete` |
+| REGENT 历史指导一战 | Victory；扣血 15、5 回合、17 决策；奖励 BEGONE 匹配 | `regent-complete` |
+| 全部原生部署记录审计 | 150 selected=150 executed；全部 rootUnchanged=true；完整候选×样本矩阵；命令不含样本选牌/续用；0 次用药 | 各目录 `combat-NN/decisions.jsonl` |
+| 请求总时限边界 | 64 samples、3 秒、要求两场；Held/TimeLimit，第一场搜索停止、0 执行命令，未进入第二场 | `deadline-final/result.json` |
+| 旧模型编号的原生录像 | 明确拒绝解码：记录 hash F986C260、当前 5D828510，没有原编号映射；不计为回放通过 | `replay-opening/replay-header.json` |
+
+9/9 是本次有限场景的原生战斗结果，未跑完整通关或统计胜率验证。`.run` 指导的新局采用全解锁和最低列相邻坐标，不能视为精确人工同根；FirstLegal 仍是可见候选基线。尚未接 Mod 在线 UI、采样选牌续接或任意中途恢复，未运行 Linux 门禁和可见游戏。完整配置、来源及人工历史差距见[实测报告](strategy/blind-native-rollout-20260928.md)。
 
 ## 0.47.1 紧急回归修复（2026-09-27）
 

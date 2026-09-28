@@ -26,7 +26,7 @@ namespace OfflineSearchHarness;
 /// LocString.Exists(table,key)                 同上                                           true                      无：同上
 /// PreloadManager.Load{Run,Act,RoomCombat}Assets  全是 Godot 资源加载                         Task.CompletedTask        无：战斗建立不用立绘/节点
 /// NCombatRulesFtue.Create                     基础教学界面是 Godot 节点                       null                      无：与游戏内无人测试同语义
-/// MigrationRegistry.RegisterAllMigrations     迁移类字段初始化要造 Godot.StringName（原生）    跳过注册                  无：离线不读任何存档
+/// MigrationRegistry.RegisterAllMigrations     迁移类字段初始化要造 Godot.StringName（原生）    只读版本元数据            只接受当前 schema，不迁移旧档
 /// NGame.GetGameVersion                        版本号读 Godot 资源（ReleaseInfoManager）       固定串                    无：只进联机握手信息
 /// PlatformUtil.GetPlatformBranch              平台原生查询                                   None                      无：同上
 /// PlatformUtil.GetPlayerNameRaw               策略构造读命令行与 Godot 文件系统               与无人测试同一份映射      无：只是显示名
@@ -39,6 +39,7 @@ namespace OfflineSearchHarness;
 /// </summary>
 internal static class GameBootstrap
 {
+    private static readonly long ClockOrigin = System.Diagnostics.Stopwatch.GetTimestamp();
     public const string HarmonyId = "combatsolver.offline.harness";
     private static Harmony? _harmony;
     private static readonly List<string> _bypasses = [];
@@ -69,7 +70,7 @@ internal static class GameBootstrap
             args: [typeof(string), typeof(string)]);
 
         // 3) 资源预载全是 Godot 资源加载；战斗建立本身不需要（怪物节点、立绘只在有 NCombatRoom 时才用）。
-        foreach (string loader in new[] { "LoadRunAssets", "LoadActAssets", "LoadRoomCombatAssets" })
+        foreach (string loader in new[] { "LoadRunAssets", "LoadActAssets", "LoadRoomCombatAssets", "LoadRoomEventAssets" })
         {
             Patch(typeof(MegaCrit.Sts2.Core.Assets.PreloadManager), loader, prefix: nameof(CompletedTaskPrefix),
                 note: $"PreloadManager.{loader} -> Task.CompletedTask（Godot 资源加载）");
@@ -81,9 +82,26 @@ internal static class GameBootstrap
             nameof(MegaCrit.Sts2.Core.Nodes.Ftue.NCombatRulesFtue.Create), prefix: nameof(NullResultPrefix),
             note: "NCombatRulesFtue.Create -> null（与游戏内 UnattendedHeadlessFtuePatch 同语义）",
             args: Type.EmptyTypes);
+        Patch(typeof(MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom), "Create", prefix: nameof(NullResultPrefix),
+            note: "NEventRoom.Create -> null（无头历史路线不创建事件节点）");
+        Patch(typeof(RelicModel), "get_HoverTipsExcludingRelic", prefix: nameof(EmptyHoverTipsPrefix),
+            note: "RelicModel.HoverTipsExcludingRelic -> 空显示提示（事件选项不加载附魔图标）");
+        Patch(typeof(UserDataPathProvider), nameof(UserDataPathProvider.GetPlatformDirectoryName),
+            prefix: nameof(MemoryPlatformDirectoryPrefix), note: "UserDataPathProvider.GetPlatformDirectoryName -> default（内存存储键，无 OS.HasFeature）");
+        Patch(typeof(MegaCrit.Sts2.Core.Platform.PlatformUtil), "GetLocalPlayerId",
+            prefix: nameof(MemoryPlayerIdPrefix), note: "PlatformUtil.GetLocalPlayerId -> 1（离线单人内存存储账号）");
+        Harmony.Patch(typeof(Godot.Time).TypeInitializer!, prefix: new HarmonyMethod(
+            typeof(GameBootstrap), nameof(SkipNodeStaticConstructorPrefix)));
+        Patch(typeof(Godot.Time), nameof(Godot.Time.GetTicksMsec), prefix: nameof(ManagedTicksPrefix),
+            note: "Time.GetTicksMsec -> Stopwatch 单调毫秒（原生命令动画计时，无 Godot 原生层）");
+        Patch(typeof(MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet), "Clear", prefix: nameof(SkipPrefix),
+            note: "NHoverTipSet.Clear -> 空显示操作（原生胜利时没有提示节点）");
+        Harmony.Patch(typeof(MegaCrit.Sts2.Core.ControllerInput.MegaInput).TypeInitializer!, prefix: new HarmonyMethod(
+            typeof(GameBootstrap), nameof(SkipNodeStaticConstructorPrefix)));
+        _bypasses.Add("MegaInput 静态构造 -> 跳过控制器 StringName（原生奖励替代选项不使用热键）");
 
         // 5) 存档迁移表：注册时会实例化每个迁移类，其中控制器按键迁移的字段初始化要造 Godot.StringName，
-        //    那是原生调用（跳转到地址 0 直接段错误）。离线不读任何存档，所以整张迁移表不注册。
+        //    那是原生调用（跳转到地址 0 直接段错误）。只读 attribute 版本，旧存档由导入器明确拒绝。
         Patch(typeof(MegaCrit.Sts2.Core.Saves.Migrations.MigrationRegistry),
             nameof(MegaCrit.Sts2.Core.Saves.Migrations.MigrationRegistry.RegisterAllMigrations),
             prefix: nameof(SkipPrefix),
@@ -146,10 +164,21 @@ internal static class GameBootstrap
                 _ = Activator.CreateInstance(migration);
             }
         }
-        _ = new MegaCrit.Sts2.Core.Saves.Migrations.MigrationManager(store);
-        Trace("migration_manager");
         SaveManager saveManager = new(store, forceSynchronous: true);
+        var migrations = AccessTools.Field(typeof(SaveManager), "_migrationManager").GetValue(saveManager)!;
+        var latestVersions = (Dictionary<Type, int>)AccessTools.Field(migrations.GetType(), "_latestVersions")
+            .GetValue(migrations)!;
+        for (int index = 0; index < MegaCrit.Sts2.Core.Saves.Migrations.IMigrationSubtypes.Count; index++)
+        {
+            var attribute = MegaCrit.Sts2.Core.Saves.Migrations.IMigrationSubtypes.Get(index)
+                .GetCustomAttribute<MegaCrit.Sts2.Core.Saves.Migrations.MigrationAttribute>();
+            if (attribute != null)
+                latestVersions[attribute.SaveType] = Math.Max(
+                    latestVersions.GetValueOrDefault(attribute.SaveType, 1), attribute.ToVersion);
+        }
+        Trace("migration_manager");
         SaveManager.MockInstanceForTesting(saveManager);
+        AccessTools.Field(typeof(SaveManager), "_currentProfileId").SetValue(saveManager, (int?)0);
         Trace("save_manager");
         saveManager.InitSettingsDataForTest();
         saveManager.InitPrefsDataForTest();
@@ -186,6 +215,31 @@ internal static class GameBootstrap
         return $"models={ModelDb.All.Count()} cards={ModelDb.AllCards.Count()} "
             + $"encounters={ModelDb.All.OfType<EncounterModel>().Count()} "
             + $"characters={ModelDb.AllCharacters.Count()} main_thread={NGame.IsMainThread()}";
+    }
+
+    private static bool EmptyHoverTipsPrefix(ref IEnumerable<MegaCrit.Sts2.Core.HoverTips.IHoverTip> __result)
+    {
+        __result = [];
+        return false;
+    }
+
+    private static bool MemoryPlatformDirectoryPrefix(ref string __result)
+    {
+        __result = "default";
+        return false;
+    }
+
+    private static bool MemoryPlayerIdPrefix(ref ulong __result)
+    {
+        __result = 1;
+        return false;
+    }
+
+    private static bool ManagedTicksPrefix(ref ulong __result)
+    {
+        __result = (ulong)((System.Diagnostics.Stopwatch.GetTimestamp() - ClockOrigin)
+            * 1000 / System.Diagnostics.Stopwatch.Frequency);
+        return false;
     }
 
     /// <summary>

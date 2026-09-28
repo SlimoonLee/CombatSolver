@@ -24,7 +24,9 @@
 
 `Majority` 先比较发现阶段票数，再比较矩阵均分；`MeanScore` 先比较矩阵均分；`RiskAverse` 依次比较搜索结果仍存活的比例、最差四分之一战损、完整胜利比例和均分。命令包括卡牌、药水或 EndTurn；`BlindCombatCommand` 去掉样本中的选牌、嵌套选择、下回合选择和预测遗物效果。发起命令后，选择页面和下一稳定决策点都需要重新观察。
 
-该入口当前是 `internal`，由 `tools/OfflineSearchHarness` 使用。`blindPolicy` 导出样本 seed、发现证据、完整评估矩阵、动作统计及全部搜索工作量；代表性 `SolverResult` 仅用于诊断，不能作为 live route 或续用缓存。宿主不导出原根 RNG 戳、隐藏牌序或样本续用计划，搜索后重新捕获 live 状态和冻结影子状态验证根未被修改。在线 mid-combat Runtime、可见状态序列化协议和选牌续接尚未接入。
+该入口当前是 `internal`，由 `tools/OfflineSearchHarness` 使用。`blindPolicy` 导出样本 seed、发现证据、完整评估矩阵、动作统计及全部搜索工作量；代表性 `SolverResult` 仅用于诊断，不能作为 live route 或续用缓存。宿主不导出原根 RNG 戳、隐藏牌序或样本续用计划，搜索后重新捕获 live 状态和冻结影子状态验证根未被修改。Mod 在线 UI、可见状态序列化协议和采样选牌续接尚未接入。
+
+离线 `SavedCombatSetup` 独占原生战前材料恢复、当前 schema/扩展门禁和完整规范化 run 对账；通过后继续已保存坐标，不重复地图历史。`HistoryCombatSetup` 独占 `.run` 指导的新局前缀、原生远古之民/节点/奖励匹配；因记录缺少坐标与解锁状态，它不是精确手操回放。`CombatRollout` 只部署去掉样本选择与续用的首命令，经原生动作队列完成后等待稳定 Play，再捕获新根重新求解；搜索共享请求剩余时限及取消令牌。`ObservedCardSelector` 处理实际可见候选，默认 Stop，显式 FirstLegal 仅为选最少张的基线。游戏保存后端始终是 `MemorySaveStore`，日志与恢复副本只写测试产物目录。原生 rollout 不替代完整 actual/simulated 差分；用法与绕过点见[离线宿主](OFFLINE_SEARCH_HARNESS.md)，9 场结果见[实测报告](strategy/blind-native-rollout-20260928.md)。
 
 这是有限候选的采样近似：候选来自各样本的最佳首命令；后续搜索仍针对各自确定化未来优化。均分不是严格的部分可观测策略价值，存活/胜利比例也不是经真实 rollout 校准的战斗胜率；搜索边界和代表样本的指标必须保留。
 
