@@ -110,7 +110,7 @@ internal static class BlindPolicyChecks
                 "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM"
                     or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH" or "METAMORPHOSIS"
                     or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
-                    or "SEEKER_STRIKE" or "CATASTROPHE" or "REBOOT" => "BLUDGEON",
+                     or "CATASTROPHE" or "REBOOT" => "BLUDGEON",
                 "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
                 "DISTRACTION" => "STRIKE_SILENT",
                 // THRASH/JACKPOT/BALL_LIGHTNING: the pool card itself deals damage, so no
@@ -201,7 +201,7 @@ internal static class BlindPolicyChecks
                 or "BUNDLE_OF_JOY" or "METAMORPHOSIS"
                 or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH"
                 or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
-                or "SEEKER_STRIKE" or "UPROAR" or "CATASTROPHE" or "REBOOT");
+                or "UPROAR" or "CATASTROPHE" or "REBOOT");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;
