@@ -351,6 +351,67 @@ internal static class BlindAuditChecks
                 finally { expected.ReleaseSimulator(); }
             }
         }
+        else if (mode == "initial-relic")
+        {
+            // Turn-1 generation relics trigger before the blind root capture (player turn 1 Play);
+            // the auditable surface is the opening hand state plus a two-turn reconciliation that
+            // proves the trigger fired exactly once and never re-fires inside the blind root.
+            RelicModel relic = player.Relics.Single(r => r.Id.Entry is "BIG_HAT" or "ORANGE_DOUGH");
+            bool bigHat = relic.Id.Entry == "BIG_HAT";
+            var colorlessIds = ModelDb.CardPool<MegaCrit.Sts2.Core.Models.CardPools.ColorlessCardPool>()
+                .GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)
+                .Select(card => card.Id.Entry)
+                .ToHashSet(StringComparer.Ordinal);
+            bool IsGenerated(PredictedCard card) => bigHat
+                ? card.Preview.Keywords.Contains(CardKeyword.Ethereal)
+                : colorlessIds.Contains(card.Preview.Id.Entry);
+            bool IsGeneratedLive(CardModel card) => bigHat
+                ? card.Keywords.Contains(CardKeyword.Ethereal)
+                : colorlessIds.Contains(card.Id.Entry);
+
+            var openingHand = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards;
+                string.Join(',', openingHand.Select(card => card.Preview.Id.Entry)) +
+                " colorless=" + string.Join(',', colorlessIds.Take(8)));
+            // The root captures after the turn's draw, so the opening hand mixes generated cards
+            // with drawn ones; filter by the relic's pool instead of counting the hand.
+            var generatedOpening = openingHand.Where(IsGenerated).ToList();
+            Check(generatedOpening.Count == 2, "turn-start relic generated exactly two opening cards");
+            Check(generatedOpening.Select(card => card.Preview.Id.Entry).Distinct().Count() == 2,
+                "turn-start relic candidates are distinct");
+            Check(generatedOpening.All(IsGenerated), "opening cards match the relic's pool");
+            evidence.Add(new { stage = "opening_generation",
+                hand = openingHand.Select(CardChoiceSupport.ChoiceCardKey).ToArray() });
+
+            PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber);
+            SimulationSnapshot twoTurns = Replay(root, endTurn);
+            try
+            {
+                string projected = Stamp(root, twoTurns);
+                var twoTurnsSim = (CombatPredictionSimulator)twoTurns.Simulator;
+                var simState = twoTurnsSim.State.GetPlayerCombatState(player);
+                // Hands are discarded at end of turn, so count the generated cards across all the
+                // player's zones: exactly the two generated cards must survive, never duplicated.
+                int generatedInSimulation = simState.Hand.Cards.Concat(simState.DrawPile.Cards)
+                    .Concat(simState.DiscardPile.Cards).Count(IsGenerated);
+                // Ethereal generated cards exhaust at end of turn (Big Hat), colorless ones survive
+                // (Orange Dough); either way the later-turn zone count proves no re-generation.
+                int expectedGeneratedLater = bigHat ? 0 : 2;
+                    string.Join(',', simState.Hand.Cards.Select(card => card.Preview.Id.Entry)));
+                Check(generatedInSimulation == expectedGeneratedLater,
+                    "simulation does not re-run the turn-start generation on later turns (got " +
+                    generatedInSimulation + ", expected " + expectedGeneratedLater + ")");
+                ExecuteNative(live, endTurn, loop);
+                var liveCombat = player.PlayerCombatState!;
+                int generatedLive = liveCombat.Hand.Cards.Concat(liveCombat.DrawPile.Cards)
+                    .Concat(liveCombat.DiscardPile.Cards).Count(IsGeneratedLive);
+                Check(generatedLive == expectedGeneratedLater,
+                    "native combat does not re-run the turn-start generation (got " + generatedLive + ")");
+                Check(projected == ContinuationStamp.CaptureLive(live).StateText,
+                    "two-turn continuation, piles and RNG match full prediction");
+                evidence.Add(new { stage = "two_turn_reconciliation", generatedInSimulation, generatedLive });
+            }
+            finally { twoTurns.ReleaseSimulator(); }
+        }
         else throw new ArgumentException("Unknown blind audit mode: " + mode);
 
         File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-audit.json"), JsonSerializer.Serialize(

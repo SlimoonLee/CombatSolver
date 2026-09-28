@@ -1,5 +1,13 @@
 # CombatSolver 测试清单
 
+## 回合开始时序族验收（2026-09-29 晚）
+配置与教训见[回合开始时序族验收](strategy/blind-rng-turnstart-20260929.md)。零行为源码改动；新增 initial-relic 审计模式。
+| 场景 | 结果 | 证据 |
+|---|---|---|
+| blind-bighat.json（NECROBINDER，虚化消耗型） | Passed 6 项：开局 2 张互异虚化牌、第二回合消耗后计数 0、两回合 Stamp 对账 | audit-bighat-final |
+| blind-orange-dough.json（IRONCLAD，无色存活型） | Passed 6 项：开局 2 张互异无色牌、第二回合存活计数 2、两回合 Stamp 对账 | audit-orange-dough-final |
+| Toolbox | 引用既有 INITIAL-TOOLBOX-INFUSED-CORE 原生验收（本日 src 改动不触及该场景） | initial-toolbox-infused-core.json |
+
 ## 收尾来源验收（2026-09-29 第五批）
 
 配置与边界见[收尾来源验收](strategy/blind-rng-final-sources-20260929.md)。零行为源码改动；审计前缀按来源泛化（二连/多连/四连前置球状闪电）。

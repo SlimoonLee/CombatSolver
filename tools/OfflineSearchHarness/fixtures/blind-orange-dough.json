@@ -1,0 +1,11 @@
+{
+  "scenarioId": "BLIND-ORANGE-DOUGH-INITIAL-RELIC-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 30,
+  "relics": [{ "relicId": "ORANGE_DOUGH" }],
+  "cards": [
+    
+  ]
+}

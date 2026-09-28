@@ -1,0 +1,11 @@
+{
+  "scenarioId": "BLIND-BIGHAT-INITIAL-RELIC-AUDIT",
+  "characterId": "NECROBINDER",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 30,
+  "relics": [{ "relicId": "BIG_HAT" }],
+  "cards": [
+    
+  ]
+}

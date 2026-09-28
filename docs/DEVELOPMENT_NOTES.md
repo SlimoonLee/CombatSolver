@@ -2,6 +2,7 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 2026-09-29 晚回合开始时序族验收：大帽子（NECROBINDER，虚化生成回合末消耗）与橙色团块（无色存活）经新增的 `initial-relic` 审计模式验收（各 6 项：开局手牌恰 2 张互异生成牌、两回合模拟/原生 Stamp 对账、生成区计数证明只触发一次）；工具箱引用既有 INITIAL-TOOLBOX-INFUSED-CORE 原生验收。教训：宿主注入 clearPlayerPiles 会清掉开局生成（此类夹具不能清牌堆）、IRONCLAD 池无虚化牌（大帽子换 NECROBINDER）。零行为源码改动。报告见[回合开始时序族验收](strategy/blind-rng-turnstart-20260929.md)。
 - 2026-09-29 晚探寻打击完整验收：此前"镜像不完整"为误判（同敌方 HP 教训同型），选择链（OwnChoice→BuildSeekerSpec 抽牌堆随机候选+MoveToHand 移动语义）一直完整；真实差异是模拟候选序未贴原版 FromCombatPile 的 (Rarity, Id) 屏幕排序——已修 BuildSeekerSpec；恢复 policy/audit 夹具与名单，新增 BlindPolicyChecks 原生卡牌选择接管段（原生候选与预测候选逐实例一致、同首候选、整场对账、live 根不变），policy 18 + audit 26 全过，攻击药水/攻击 policy 回归一致。无人测试 308 同晚重跑 Passed（准入超时为瞬时状态）。改动：src/Search/CardChoiceSupport.cs（排序）+ 工具层；已部署。
 - 2026-09-29 异化水集成缺口修复：盲估值中 `PotionPolicyUnsatisfiedException` 的根因是搜索节点继承快照整场用药计数——用药后的观察根让每条新路线都被记为一次显式用药（对照实验证明弃牌重抽配全创伤手牌同样触发，非异化水特有）。新增 `ZeroInheritedPotionUse` 政策位：盲续搜（内层决策与最终排序）只按本次搜索新增的用药评估，药水的整场核算仍由外层可执行轨迹与既有快照字段承担；政策仍不可满足时盲决策与发现阶段回退免药重试（已定义业务分支，非宽泛捕获）。异化水 policy 10 项转绿，40 个 policy 夹具、既有审计、正反例与 121 项合同全部回归一致，Mod 已同源码部署。
 - 2026-09-29 第五批追加：验收大奖（攻击后生成 0 费牌，有放回抽样四样本互异）、君权自授（格挡+随机无色，重锤反例胜出）及二连（前置球状闪电的两命令审计前缀泛化；激发随机目标逐样本敌方 HP 15/22→23/14→7/30），零行为源码改动，合计 99 项；球状闪电前缀重构回归通过。后续同日补齐：疯狂科学（EnumMembers 注入 Skill+Chaos 骑手，五样本随机生成互异）、多连/四连；慷慨捐助 AnyAlly 单局不适用保持边界。报告见[收尾来源验收](strategy/blind-rng-final-sources-20260929.md)。
