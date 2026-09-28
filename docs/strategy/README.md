@@ -4,6 +4,7 @@
 
 当前搜索职责见 [架构地图](../ARCHITECTURE.md)，实际测试与未验证范围见 [测试矩阵](../TEST_MATRIX.md)。
 
+- [未知 RNG 随机机制扩展交接](blind-rng-expansion-handoff-20260928.md)：行为基线、代码职责、机制族、逐批验收、生产经验与可直接使用的任务说明。
 - [策略优化日志](STRATEGY_OPTIMIZATION_LOG.md)：样例、策略认识与数值记录。
 - [状态键漏掉整场历史计数](state-key-history-counters-20260919.md)：金斧等六张牌读整场计数而键不含，条件式修法的逐根对照与无条件追加的代价。
 - [战后掉药预测与满栏用药门槛](potion-reward-outlook-20260918.md)：奖励 RNG 镜像的原版依据、额度口径、无头镜像校验、离线等价性与满栏对照。
