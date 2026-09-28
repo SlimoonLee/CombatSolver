@@ -97,6 +97,17 @@ internal static class BlindAuditChecks
                     .Hand.Cards.Where(c => c.Preview.Type == CardType.Attack).Take(3).ToList();
                 Check(kusarigamaAttacks.Count == 3, "kusarigama fixture has three attacks");
             }
+            // ParryingShield strikes a random enemy at side turn end while block holds 10+; the
+            // audit plays Defend + Iron Wave (5+5 block) then ends the turn to reach the trigger.
+            bool hasParryingShield = potion == null && player.Relics.Any(r => r.Id.Entry == "PARRYING_SHIELD")
+                && !hasKusarigama;
+            if (hasParryingShield)
+            {
+                var shieldHandIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards
+                    .Select(c => c.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
+                Check(shieldHandIds.Contains("DEFEND_IRONCLAD") && shieldHandIds.Contains("IRON_WAVE"),
+                    "parrying shield fixture has Defend and Iron Wave");
+            }
             if (potion == null)
             {
                 // Audited effects either place exactly one pool card in the opening hand, or (for
@@ -110,6 +121,7 @@ internal static class BlindAuditChecks
                      "JACKPOT", "MANIFEST_AUTHORITY", "MAD_SCIENCE"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
                 command = hasKusarigama ? Play(kusarigamaAttacks[0].Preview.Id.Entry)
+                    : hasParryingShield ? Play("DEFEND_IRONCLAD")
                     : auditedId == null
                     ? new(PlanActionKind.EndTurn, root.StartTurnNumber)
                     : Play(auditedId);
@@ -119,7 +131,7 @@ internal static class BlindAuditChecks
                 command = new(PlanActionKind.UsePotion, root.StartTurnNumber,
                     PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
             }
-            Check(hasKusarigama
+            Check(hasKusarigama || hasParryingShield
                 || command.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
@@ -157,6 +169,8 @@ internal static class BlindAuditChecks
             PlanAction[] Prefix(CombatRootSnapshot source, PlanAction first)
             {
                 if (channelsThenTurnEnd) return [first, endTurnCommand];
+                if (hasParryingShield)
+                    return [Play("IRON_WAVE"), first, endTurnCommand];
                 if (hasKusarigama)
                 {
                     // Two other attacks run first; the audited third strike crosses the counter.

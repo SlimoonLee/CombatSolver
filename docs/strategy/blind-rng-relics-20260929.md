@@ -19,4 +19,5 @@
 | BIG_HAT / ORANGE_DOUGH | 缺 Mirror | 原版 override `AfterSideTurnStart`,模拟侧尚无该遗物 Hook 的分发面;新增属行为改动任务(需建 Hook 面 + 硬门控注册),不宜在本批就地实现 |
 | TOOLBOX | 时序不可行 | 原版在第一回合抽牌前三选一,该触发在盲根捕获(Play 阶段)之前已被原生消耗,夹具无法在盲路径复现 |
 | `KUSARIGAMA`(锁镰:每第 3 张攻击对随机敌人 8 伤) | 已验收 | 审计命令选择特判:手牌三张攻击(TWIN_STRIKE/STRIKE/IRON_WAVE)以前缀两张 + 审计命令一张的方式跨越计数器;双敌 30/30,逐样本敌方 HP 3/30、9/24 互异,27 项通过,攻击药水回归 35 项通过 |
-| PARRYING_SHIELD / WHISPERING_EARRING 等 | 后续批次 | 触发链更长(受伤/回合流转),按同模式逐源验收 |
+| PARRYING_SHIELD | 已验收 | 格挡≥10 触发:审计前缀 DEFEND+IRON_WAVE+EndTurn,逐样本敌方 HP 19/30、25/24 互异,27 项通过 |
+| WHISPERING_EARRING | 保持边界 | 第一回合自动出牌引擎 + AnyAlly 多人目标,超出单局审计范围 |
