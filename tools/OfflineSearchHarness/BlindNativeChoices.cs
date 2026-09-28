@@ -81,6 +81,15 @@ internal static class BlindNativeChoices
                 }
                 if (template == null)
                     throw new NotSupportedException("Blind native choice has no observed source definition.");
+                // Draw-pile selection sources (Seeker Strike family) present the vanilla screen
+                // order; the prediction's automatic policy picks that same first candidate, so the
+                // deployment path takes it directly instead of running the priority branching.
+                if (template.Effect == PlanChoiceEffect.MoveToHand && template.SourcePile == PileType.Draw)
+                {
+                    selector.LastBlindEvidence = new { source = command.CardId, policy = "first_candidate",
+                        options = cards.Select(CardChoiceSupport.ChoiceCardKey).ToArray() };
+                    return cards.Take(min).ToArray();
+                }
                 PredictedCard[] observed = cards.Select(card => new PredictedCard((CardModel)card.MutableClone())).ToArray();
                 CardChoiceSpec spec = template with { Options = observed, SourceCards = observed, MinCount = min, MaxCount = max,
                     IsImplicitAllSelection = cards.Length == min };

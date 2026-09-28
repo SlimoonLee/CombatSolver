@@ -109,8 +109,8 @@ internal static class BlindPolicyChecks
             {
                 "INFERNAL_BLADE" or "CINDER" or "DRAIN_POWER" or "HIDDEN_GEM"
                     or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH" or "METAMORPHOSIS"
-                    or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
-                     or "CATASTROPHE" or "REBOOT" => "BLUDGEON",
+                    or "MANIFEST_AUTHORITY" or "MAD_SCIENCE" or "SEEKER_STRIKE"
+                    or "CATASTROPHE" or "REBOOT" => "BLUDGEON",
                 "WHITE_NOISE" or "CHAOS" => "STRIKE_DEFECT",
                 "DISTRACTION" => "STRIKE_SILENT",
                 // THRASH/JACKPOT/BALL_LIGHTNING: the pool card itself deals damage, so no
@@ -186,6 +186,74 @@ internal static class BlindPolicyChecks
             finally { expected.ReleaseSimulator(); }
             evidence.Add(new { stage = "native_observed_selection", selected });
         }
+        else if (poolCardCommand != null && poolCardCommand.CardId == "SEEKER_STRIKE")
+        {
+            // Seeker Strike presents the real draw-pile candidate screen. The blind deployment path
+            // must pick the same candidate the prediction's automatic policy picks, and the native
+            // candidate list must match the predicted candidates instance by instance.
+            List<IReadOnlyList<string>> predictedChoiceOptions = [];
+            PlanCardChoice? PredictionChoicePolicy(TurnStartChoiceRequest request)
+            {
+                if (request.Spec == null) return null;
+                predictedChoiceOptions.Add(request.Spec.Options
+                    .Select(CardChoiceSupport.ChoiceCardKey).ToArray());
+                return CardChoiceSupport.BuildRequestedChoice(request.Spec, ["__FIRST__"]) with
+                {
+                    SourceId = request.SourceId,
+                    ContextId = request.ContextId,
+                    Timing = request.Timing,
+                };
+            }
+            SimulationSnapshot predicted;
+            try
+            {
+                predicted = new CombatBeamSolver(root, names, damage, policy)
+                    .ReplayBlindAuditForTesting([poolCardCommand], PredictionChoicePolicy);
+                Check(predictedChoiceOptions.Count == 1 && predictedChoiceOptions[0].Count >= 2,
+                    "prediction presents multiple distinct draw-pile candidates");
+            }
+            finally { }
+            ContinuationStamp predictedStamp;
+            try
+            {
+                predictedStamp = ContinuationStamp.CapturePredicted(root.PlayerIdentity,
+                    predicted.Simulator, predicted.Turn, root.Forecast, root.StartTurnNumber);
+            }
+            finally { predicted.ReleaseSimulator(); }
+
+            ObservedCardSelector selector = new("Blind");
+            using var selectScope = CardSelectCmd.PushSelector(selector, localOnly: true);
+            using var commandScope = BlindNativeChoices.Bind(selector, live, poolCardCommand, options with { BlindSamples = 3 },
+                loop, CancellationToken.None);
+            GameAction action = CombatRollout.CreateAction(live, root.PlayerIdentity, poolCardCommand);
+            RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(action);
+            loop.RunUntilCompleted(action.CompletionTask, TimeSpan.FromSeconds(30), "blind native seeker strike completion");
+            if (action.Exception != null) throw action.Exception;
+            JsonElement selected = JsonSerializer.SerializeToElement(selector.Choices.Single(), Program.Json);
+            Check(selected.GetProperty("selected").GetArrayLength() == 1,
+                "native seeker strike selects exactly one draw-pile candidate");
+            string[] nativeOptions = selected.GetProperty("options").EnumerateArray()
+                .Select(item => item.GetString() ?? "").ToArray();
+            string nativeSelected = selected.GetProperty("selected").EnumerateArray().First().GetString() ?? "";
+            Check(nativeOptions.SequenceEqual(predictedChoiceOptions[0]),
+                "native candidates match predicted candidates instance by instance in vanilla screen order");
+            SimulationSnapshot expected = new CombatBeamSolver(root, names, damage, policy)
+                .ReplayBlindAuditForTesting([poolCardCommand], PredictionChoicePolicy);
+            try
+            {
+                ContinuationStamp expectedStamp = ContinuationStamp.CapturePredicted(root.PlayerIdentity,
+                    expected.Simulator, expected.Turn, root.Forecast, root.StartTurnNumber);
+                Check(expectedStamp == predictedStamp,
+                    "the automatic prediction choice is deterministic across replays");
+            }
+            finally { expected.ReleaseSimulator(); }
+            Check(nativeSelected == predictedChoiceOptions[0][0],
+                "the native screen picks the same first candidate the prediction picked");
+            Check(predictedStamp == ContinuationStamp.CaptureLive(live),
+                "native seeker selection, attack, piles and RNG match full prediction");
+            evidence.Add(new { stage = "native_observed_selection", nativeOptions, nativeSelected,
+                predictedOptions = predictedChoiceOptions[0] });
+        }
         File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-policy-checks.json"),
             JsonSerializer.Serialize(new { status = "Passed", checks, independentPolicySearchRuns = workRuns, evidence }, Program.Json));
         return $"checks={checks} Passed";
@@ -201,7 +269,7 @@ internal static class BlindPolicyChecks
                 or "BUNDLE_OF_JOY" or "METAMORPHOSIS"
                 or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH"
                 or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
-                or "UPROAR" or "CATASTROPHE" or "REBOOT");
+                or "SEEKER_STRIKE" or "UPROAR" or "CATASTROPHE" or "REBOOT");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;

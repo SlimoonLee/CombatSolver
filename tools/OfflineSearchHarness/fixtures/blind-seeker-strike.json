@@ -1,0 +1,19 @@
+{
+  "scenarioId": "BLIND-SEEKER-STRIKE-AUDIT",
+  "characterId": "IRONCLAD",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 30,
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "SEEKER_STRIKE", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "BLUDGEON", "pile": "Draw" },
+    { "cardId": "DEMON_FORM", "pile": "Draw" },
+    { "cardId": "JUGGERNAUT", "pile": "Draw" },
+    { "cardId": "TWIN_STRIKE", "pile": "Draw" },
+    { "cardId": "IMPERVIOUS", "pile": "Draw" }
+  ]
+}

@@ -832,6 +832,10 @@ internal static partial class CardChoiceSupport
             .ToList()
             .StableShuffle(simulator.Rng.CombatCardSelection)
             .Take(playedCard.Preview.DynamicVars.Cards.IntValue)
+            // Vanilla's combat-pile screen hands the selector a rarity/name ordered list, so the
+            // presented candidate order (and therefore "first candidate") follows that ordering.
+            .OrderBy(option => option.Preview.Rarity)
+            .ThenBy(option => option.Preview.Id.Entry, StringComparer.Ordinal)
             .ToList();
         if (options.Count == 0)
             return null;
