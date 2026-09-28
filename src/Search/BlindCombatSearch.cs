@@ -206,8 +206,22 @@ internal static partial class CombatSearchCoordinator
         {
             cancellationToken.ThrowIfCancellationRequested();
             CombatRootSnapshot sampleRoot = root.ForkForSample(seed, options.KnownTopDrawCards);
-            SolverResult result = Solve(sampleRoot, displayNames, battleDamage,
-                samplePolicy, cancellationToken, progressCallback: null);
+            SolverResult result;
+            try
+            {
+                result = Solve(sampleRoot, displayNames, battleDamage,
+                    samplePolicy, cancellationToken, progressCallback: null);
+            }
+            catch (PotionPolicyUnsatisfiedException)
+            {
+                // Discovery only nominates first commands; potion uses are still evaluated on outer
+                // executable trajectories even without discovery votes. Smart's use-or-save
+                // tradeoff can be unsatisfiable in this budget when every completed route used the
+                // potion, so discovery retries without the policy instead of failing the search.
+                result = Solve(sampleRoot, displayNames, battleDamage,
+                    samplePolicy with { PotionPolicy = SolverPotionPolicy.Disabled },
+                    cancellationToken, progressCallback: null);
+            }
             RecordWork(result);
             representative ??= result;
             PlanAction? first = BlindFirstAction(root.StartTurnNumber, result);
@@ -265,9 +279,26 @@ internal static partial class CombatSearchCoordinator
         }).ToArray();
         BlindSearchActionSummary selected = SelectBlindAction(summaries, options.Aggregation);
         // This route is explicitly diagnostic. Deployment receives only SelectedAction.
-        representative = new CombatBeamSolver(root.ForkForSample(seeds[0], options.KnownTopDrawCards),
-            displayNames, battleDamage, samplePolicy, cancellationToken, searchProfile: samplePolicy.Profile,
-            initialActionConstraint: selected.FirstAction).Solve();
+        var representativePolicy = samplePolicy;
+        CombatBeamSolver representativeSolver;
+        while (true)
+        {
+            representativeSolver = new(root.ForkForSample(seeds[0], options.KnownTopDrawCards),
+                displayNames, battleDamage, representativePolicy, cancellationToken,
+                searchProfile: representativePolicy.Profile,
+                initialActionConstraint: selected.FirstAction);
+            try
+            {
+                representative = representativeSolver.Solve();
+                break;
+            }
+            catch (PotionPolicyUnsatisfiedException)
+            {
+                // The constrained first command may be a potion use whose every completed route
+                // fails Smart's tradeoff at this budget; the diagnostic route drops the policy.
+                representativePolicy = representativePolicy with { PotionPolicy = SolverPotionPolicy.Disabled };
+            }
+        }
         RecordWork(representative);
         return new(representative, selected.FirstAction, selected.FirstActionKey, options.Aggregation,
             samples, evaluations.ToArray(),

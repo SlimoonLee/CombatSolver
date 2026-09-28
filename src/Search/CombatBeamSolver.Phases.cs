@@ -1074,6 +1074,9 @@ internal sealed partial class CombatBeamSolver
                     _forecast,
                     _startTurnNumber)
                 : null;
+            // The potion-policy baseline records the snapshot use count at the search root so the final ordering can judge only the potion uses this search itself adds.
+            _rootPotionUseBaseline = policy.ZeroInheritedPotionUse ? snapshot.PotionUseCount : 0;
+            _rootPotionStrategicCostBaseline = policy.ZeroInheritedPotionUse ? snapshot.PotionStrategicCost : 0;
             SearchNode root = new(
                 null,
                 0,

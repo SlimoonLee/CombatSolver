@@ -11,7 +11,7 @@
 | audit 大奖/君权自授/二连/多连/四连/疯狂科学Chaos | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
 | 球状闪电回归（前缀重构） | Passed 26 项 | `audit-regress5-bl` |
 
-慷慨捐助（AnyAlly 单局不适用）边界见报告；疯狂科学 Chaos 骑手与多连/四连已补验收。
+慷慨捐助（AnyAlly 单局不适用）保持边界；疯狂科学 Chaos 骑手、多连/四连与异化水（ZeroInheritedPotionUse 修复）均已验收。
 
 ## 遗物 Hook 验收（2026-09-29 第四批）
 
@@ -34,7 +34,7 @@
 
 | 组 | 结果 | 证据 |
 |---|---|---|
-| policy 第三批 14 场景（新生之喜/羽化/发现/富足/类星体/飞溅/预知之滴/往昔之忆/疯狂之触/四生成 Power） | Passed 134 项；异化水受阻（Smart 药水政策在盲路径无可执行路线，记录为集成缺口） | `bundle-of-joy` 等 |
+| policy 第三批 14 场景（新生之喜/羽化/发现/富足/类星体/飞溅/预知之滴/往昔之忆/疯狂之触/四生成 Power） | Passed 134 项；异化水后续由 ZeroInheritedPotionUse 修复转绿（10 项） | `bundle-of-joy` 等 |
 | audit 第三批 12 场景（上列卡牌 + 弹跳药瓶/狠揍双敌 + 四 Power EndTurn） | 各 Passed 26 项，弹跳药瓶逐样本敌方 HP 互异并原生对账 | `audit-*` |
 | 全量最终清扫 | policy 37 夹具 36 Passed；audit effects 34 夹具全 Passed；delayed/immediate 17/22；采样合同 121 项 | `final-*` |
 | Release 构建与部署、Windows 结构门禁 | Passed：0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=241`；Mod 已部署（占用阻塞解除） | 本轮命令输出 |

@@ -55,6 +55,8 @@ internal sealed partial class CombatBeamSolver(
     private readonly IntentForecast _forecast = root.Forecast;
     private readonly int _startTurnNumber = root.StartTurnNumber;
     private readonly int _totalFloor = root.TotalFloor;
+    private int _rootPotionUseBaseline;
+    private int _rootPotionStrategicCostBaseline;
     private readonly int _initialEnemyCount = root.Enemies.Count;
     private readonly bool _hasRegisteredPowerCards = root.PlayerCardIds.Any(
         PowerCardValuationModels.Registry.ContainsCardId);
@@ -138,7 +140,8 @@ internal sealed partial class CombatBeamSolver(
         _minimumPotionUses,
         policy.Diagnostics,
         _detailedDiagnostics,
-        battleDamage);
+        battleDamage,
+        _rootPotionUseBaseline);
 
     private bool AllowsPotionUse(int slot, string potionId)
         => _potionStrategy.AllowsExplicitUse(

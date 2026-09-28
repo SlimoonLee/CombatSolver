@@ -23,6 +23,13 @@ internal sealed record SearchPolicySnapshot(
     public int EarlyTurnExplorationDepth { get; init; }
     public int EarlyTurnExplorationBudgetMilliseconds { get; init; }
     public bool PredictPotionReward { get; init; }
+    /// <summary>
+    /// Blind continuation searches restart from a mid-combat observation whose snapshot already
+    /// counts the potion use that produced it. Zeroing the inherited potion count and strategic
+    /// cost at the root scores the route the inner search is about to nominate, not the whole
+    /// combat; the outer executable trajectory owns the full-combat potion accounting.
+    /// </summary>
+    public bool ZeroInheritedPotionUse { get; init; }
     public NoveltySearchOptions? NoveltySearch { get; init; }
     public NoveltyPortfolioBudget NoveltyBudget { get; init; } = NoveltyPortfolioBudget.Default;
     public bool Act3BossStrategy { get; init; }

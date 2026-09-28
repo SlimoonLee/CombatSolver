@@ -39,12 +39,33 @@ internal sealed class BlindContinuationPolicy(
         RequestWorkTotals = null,
         UseBeamWidthPortfolio = false,
         UseNoveltyPortfolio = false,
+        ZeroInheritedPotionUse = true,
         Profile = policy.Profile with
         {
             MaxExpandedNodes = Math.Min(policy.Profile.MaxExpandedNodes, options.MaxPolicyExpandedNodes),
             SoftTimeBudgetMilliseconds = Math.Max(25, decisionBudgetMilliseconds / options.PolicySamples),
         },
     };
+
+    /// <summary>
+    /// Smart's use-or-save tradeoff can still be unsatisfiable inside this tiny budget (for
+    /// example when no route can improve on the potion-free baseline), so an unsatisfied potion
+    /// policy retries without it instead of failing the evaluation.
+    /// </summary>
+    private SolverResult SolveDecision(CombatRootSnapshot sample, SearchPolicySnapshot searchPolicy)
+    {
+        try
+        {
+            return CombatSearchCoordinator.Solve(sample, names, damage, searchPolicy,
+                cancellationToken, progressCallback: null);
+        }
+        catch (PotionPolicyUnsatisfiedException)
+        {
+            return CombatSearchCoordinator.Solve(sample, names, damage,
+                searchPolicy with { PotionPolicy = SolverPotionPolicy.Disabled },
+                cancellationToken, progressCallback: null);
+        }
+    }
 
     internal PlanCardChoice? ObserveChoice(TurnStartChoiceRequest request, IList<PlanCardChoice>? observed = null)
         => BlindObservedChoices.Resolve(request, names, policy.Profile, observed);
@@ -60,8 +81,7 @@ internal sealed class BlindContinuationPolicy(
             cancellationToken.ThrowIfCancellationRequested();
             CombatRootSnapshot sample = seed == _decisionSeeds[0] ? normalized : observation.ForkForSample(seed);
             SearchPolicySnapshot searchPolicy = DecisionPolicy;
-            SolverResult result = CombatSearchCoordinator.Solve(sample, names, damage, searchPolicy,
-                cancellationToken, progressCallback: null);
+            SolverResult result = SolveDecision(sample, searchPolicy);
             recordWork(result);
             PlanAction command = CombatSearchCoordinator.BlindFirstAction(observation.StartTurnNumber, result)
                 ?? throw new InvalidOperationException("Independent blind policy search produced no command: " + result.BoundaryReason);
@@ -108,8 +128,7 @@ internal sealed class BlindContinuationPolicy(
                     if (after.BoundaryReason != SearchBoundaryReason.None)
                         throw new NotSupportedException("Blind potion continuation reached " + after.BoundaryReason);
                     CombatRootSnapshot continuation = sample.ObservePrediction(after.Simulator);
-                    SolverResult result = CombatSearchCoordinator.Solve(continuation, names, damage, searchPolicy,
-                        cancellationToken, progressCallback: null);
+                    SolverResult result = SolveDecision(continuation, searchPolicy);
                     recordWork(result);
                     score += result.BestNode.Score;
                     losses += result.ProjectedBattleHpLost;

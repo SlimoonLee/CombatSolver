@@ -15,7 +15,8 @@ internal sealed partial class CombatBeamSolver
         int minimumPotionUses,
         SearchDiagnosticsSink diagnostics,
         bool detailedDiagnostics,
-        BattleDamageSnapshot battleDamage)
+        BattleDamageSnapshot battleDamage,
+        int rootPotionUseBaseline)
     {
         /// <summary>
         /// The HP a potion must save to be worth spending, scaled by how much HP is worth in this fight. When HP
@@ -36,7 +37,10 @@ internal sealed partial class CombatBeamSolver
                     SearchFeatures features = SearchFeatures.Capture(candidate.Node);
                     int sold = features.FutureSoldHp;
                     int battleSold = battleDamage.SoldHpCommitted + sold;
-                    int potionCount = features.PotionCount;
+                    // A blind continuation search restarts from a mid-combat observation that
+                    // already counts the potion use which produced it; judge only the uses this
+                    // search adds, otherwise every route looks like a potion route.
+                    int potionCount = features.PotionCount - rootPotionUseBaseline;
                     int explicitPotionCount = PotionUsePolicy.ExplicitUseCount(
                         potionCount,
                         candidate.Snapshot.AutomaticPotionUseCount);
@@ -287,7 +291,9 @@ internal sealed partial class CombatBeamSolver
                         ? $"指定药水必须使用，但搜索没有找到可执行路线：{potionStrategy.DescribeForcedUses()}。"
                         : potionPolicy == SolverPotionPolicy.RequireAtLeastOne
                         ? "本场药水策略要求至少使用一瓶，但搜索没有找到可执行的用药路线。"
-                        : "本场药水策略没有可执行路线。");
+                        : "本场药水策略没有可执行路线。"
+                    + $" [diagnostic evaluated={evaluated.Count} policyCandidates={policyCandidates.Count}"
+                    + $" explicit={string.Join(',', policyCandidates.Select(c => c.ExplicitPotionCount))}]");
             }
             var selectedCandidate = selected[0];
             int potionBranchesRejected = policyCandidates.Count(candidate => candidate.PotionCount > 0)
