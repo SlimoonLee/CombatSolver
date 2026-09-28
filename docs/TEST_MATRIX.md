@@ -7,11 +7,12 @@
 | 场景 | 结果 | 证据 |
 |---|---|---|
 | `blind-pool-jackpot.json` | Passed 9 项：自身伤害故无斩杀反例，矩阵与重观察 | `jackpot` |
-| `blind-pool-manifest-authority.json`、`blind-pool-mad-science.json` | 各 Passed 12 项：重锤零损击杀胜出 | `manifest-authority`、`mad-science` |
-| audit 大奖/君权自授/二连/多连/四连/疯狂科学Chaos | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
+| `blind-pool-manifest-authority/mad-science/seeker-strike/catastrophe/reboot.json` | 各 Passed 12 项：重锤零损击杀胜出 | `manifest-authority` 等 |
+| `blind-pool-uproar.json` | Passed 9 项：自身伤害故无斩杀反例 | `uproar` |
+| audit 大奖/君权自授/二连/多连/四连/疯狂科学Chaos/横祸/重启 | 各 Passed 26 项：生成互异（大奖 0 费牌有放回抽样；君权自授无色互异）、激发随机目标逐样本可辨、原生完整对账 | `audit-*` |
 | 球状闪电回归（前缀重构） | Passed 26 项 | `audit-regress5-bl` |
 
-慷慨捐助（AnyAlly 单局不适用）保持边界；疯狂科学 Chaos 骑手、多连/四连与异化水（ZeroInheritedPotionUse 修复）均已验收。
+慷慨捐助（AnyAlly 单局不适用）保持边界；疯狂科学 Chaos 骑手、多连/四连、异化水（ZeroInheritedPotionUse 修复）与横祸/重启（洗牌流）均已验收；探寻打击/骚动的 audit 对账待查（policy 已过，边界见报告）。
 
 ## 遗物 Hook 验收（2026-09-29 第四批）
 

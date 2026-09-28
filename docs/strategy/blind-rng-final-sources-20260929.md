@@ -26,3 +26,14 @@
 
 骑手经 `EnumMembers` 注入(`TinkerTimeType=Skill`、`TinkerTimeRider=Chaos`)验收:policy 12 项(重锤零损击杀反例胜出)+ audit 26 项(Chaos 骑手的随机生成五样本互异:BLOODLETTING/UNMOVABLE/FEEL_NO_PAIN/HELLRAISER/HOWL_FROM_BEYOND,格挡 8 与免费入手一致),原生完整对账通过。其余骑手(Sapping/Violence/Choking/Energized/Wisdom/Expertise/Curious/Improvement)均为确定效果,不属随机因素验收范围;`MockedChaosCard` 测试后门未使用。
 | MAD_SCIENCE(疯狂科学) | 已验收(Chaos 骑手) | 其余骑手为确定效果,见骑手补充章节 |
+
+## 洗牌流与先随机后选取补(同日)
+
+| 来源 | 结果 |
+|---|---|
+| `CATASTROPHE`(横祸:Shuffle 流随机取牌打出) | policy 12 项 + audit 26 项;抽牌堆逐张顺序逐样本互异(保序键),原生对账一致 |
+| `REBOOT`(重启:手牌回抽洗牌再抽,0 费) | policy 12 项 + audit 26 项;洗牌后抽牌堆顺序逐样本互异,原生对账一致 |
+| `SEEKER_STRIKE`(探寻打击:先随机候选再选一,1 费攻击) | policy 12 项通过;audit 原生对账失败,待查 |
+| `UPROAR`(骚动:攻击×2 + Shuffle 流随机取攻击自动打出) | policy 9 项通过;audit 原生对账失败,待查 |
+
+审计样本结果键的抽牌堆部分改为**保序**,使洗牌效果可观测;对其它来源无假通过风险(互异检查是真差异检查)。两处 audit 失败的共性是"取牌/自动打出与原生逐张对齐"的细节(疑似自动目标或候选顺序的 RNG 消耗差异),按交接规范显式登记为待查,不声称通过;两个失败夹具未入库。

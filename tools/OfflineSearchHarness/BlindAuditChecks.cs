@@ -118,7 +118,8 @@ internal static class BlindAuditChecks
                     ["DUALCAST", "MULTI_CAST", "QUADCAST", "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
                      "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
                      "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED",
-                     "JACKPOT", "MANIFEST_AUTHORITY", "MAD_SCIENCE"];
+                     "JACKPOT", "MANIFEST_AUTHORITY", "MAD_SCIENCE",
+                     "SEEKER_STRIKE", "UPROAR", "CATASTROPHE", "REBOOT"];
                 string? auditedId = auditedCards.FirstOrDefault(handIds.Contains);
                 command = hasKusarigama ? Play(kusarigamaAttacks[0].Preview.Id.Entry)
                     : hasParryingShield ? Play("DEFEND_IRONCLAD")
@@ -136,6 +137,7 @@ internal static class BlindAuditChecks
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
                 or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
+                or "SEEKER_STRIKE" or "UPROAR" or "CATASTROPHE" or "REBOOT"
                 || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION"
                     or "OROBIC_ACID" or "SNECKO_OIL" or "ENTROPIC_BREW" or "COSMIC_CONCOCTION"
                 || (command.Kind == PlanActionKind.EndTurn && string.IsNullOrEmpty(command.CardId)),
@@ -243,8 +245,10 @@ internal static class BlindAuditChecks
                     // potion slots and orb types all differ per sample for the respective sources.
                     string[] discard = simState.DiscardPile.Cards.Select(CardChoiceSupport.ChoiceCardKey)
                         .OrderBy(key => key, StringComparer.Ordinal).ToArray();
-                    string[] drawPile = simState.DrawPile.Cards.Select(CardChoiceSupport.ChoiceCardKey)
-                        .OrderBy(key => key, StringComparer.Ordinal).ToArray();
+                    // Draw order stays ordered so reshuffle effects (Reboot) are observable;
+                    // independent samples legitimately differ in order for shuffle-stream sources.
+                    string[] drawPile = simState.DrawPile.Cards
+                        .Select(CardChoiceSupport.ChoiceCardKey).ToArray();
                     string[] slots = Enumerable.Range(0, player.PotionSlots.Count)
                         .Select(slot => simCombat.GetPotionAtSlot(player, slot)?.Id.Entry ?? "-").ToArray();
                     string[] orbs = simState.OrbQueue.Orbs.Select(orb => orb.Id.Entry).ToArray();
