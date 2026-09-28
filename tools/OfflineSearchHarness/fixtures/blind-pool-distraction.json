@@ -1,0 +1,13 @@
+{
+  "scenarioId": "BLIND-POOL-DISTRACTION-OPPORTUNITY-COST",
+  "characterId": "SILENT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-pool-value-20260929",
+  "enemyCurrentHp": 6,
+  "initialPlayerEnergy": 1,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "DISTRACTION", "pile": "Hand" },
+    { "cardId": "STRIKE_SILENT", "pile": "Hand", "count": 5 }
+  ]
+}

@@ -1,5 +1,7 @@
 # 未知 RNG：随机池估值与逐步观察策略
 
+> 本文保留 2026-09-28 批次的结果与评分口径。后续对 PowerPotion/ColorlessPotion 通道及直接生成到手牌卡牌的验收见[随机池扩展验收](blind-pool-expansion-20260929.md)。
+
 ## 本轮结果
 
 本轮在已同步的 `origin/main@7236330` 上修正随机池动作遗漏、原生药水选牌缺口，以及首动作复评直接采用样本全知路线的问题。实现位于 `codex/blind-rng`，入口仍是 OfflineSearchHarness 的 blind 模式；游戏内常规 UI 仍使用确定性求解器。

@@ -48,6 +48,7 @@
 | 未知 RNG 原生命令执行、用户存档与历史指导的 9 场实测 | [无头原生战斗实测](strategy/blind-native-rollout-20260928.md) |
 | 同步 0.47.2 后的随机药水、添柴、跨回合正反例与信息边界缺口 | [未知 RNG 专项核查](strategy/blind-rng-audit-20260928.md) |
 | 随机池首动作补齐、观察后选牌、外层轨迹避免全知未来及 94 项检查 | [随机池与逐步观察策略](strategy/blind-pool-policy-20260928.md) |
+| PowerPotion/ColorlessPotion 通道与直接生成到手牌三卡的盲估值及原生态验收 | [随机池扩展验收](strategy/blind-pool-expansion-20260929.md) |
 | 接手扩展随机牌/药水/机制：代码职责、逐批流程、验收模板、已踩坑与架构缺口 | [未知 RNG 扩展交接](strategy/blind-rng-expansion-handoff-20260928.md) |
 | 完整性能优化正式 PR、路线控件复用、0.38.6 合并验证与对照 | [正式 PR 验收](performance/performance-pr-20260915.md) |
 | 自身弃牌续执行正式接入、搜索等价与整场对照 | [正式续执行与整搜](performance/choice-continuation-search-20260914.md) |

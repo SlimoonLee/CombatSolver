@@ -1,5 +1,26 @@
 # CombatSolver 测试清单
 
+## 随机池扩展验收（2026-09-29）
+
+配置与评分范围见[随机池扩展验收](strategy/blind-pool-expansion-20260929.md)。共同配置与 2026-09-28 相同；证据根为仓库 `.local/blind-policy-20260929/`。本批零行为源码改动，只扩展专项检查断言与夹具。
+
+| 场景 | 结果 | 证据目录 |
+|---|---|---|
+| `blind-pool-power.json` | Passed 14 项：0 能量注入、隐藏未来独立性、三张能力牌和跳过均复评、原生选 `STONE_ARMOR` 并完整 continuation/RNG 对账 | `power` |
+| `blind-pool-colorless.json` | Passed 14 项：同上，原生选 `JACK_OF_ALL_TRADES` | `colorless` |
+| `blind-pool-infernal-blade.json` | Passed 11 项：随机池卡牌进入完整矩阵；`BLUDGEON` 3/3 零损击杀领先 InfernalBlade（平均 2.67 HP）；生成后重观察并打出生成牌 | `infernal-blade` |
+| `blind-pool-white-noise.json` | Passed 11 项：`STRIKE_DEFECT` 3/3 零损击杀领先 WhiteNoise（4 HP，与 EndTurn 同分）；生成后重观察（不断言采纳，理由见报告） | `white-noise` |
+| `blind-pool-distraction.json` | Passed 11 项：`STRIKE_SILENT` 3/3 零损击杀领先 Distraction（2.33 HP）；生成后打出生成牌 | `distraction` |
+| `blind-power-potion.json` / effects | Passed 35 项：四样本隐藏输入扰动、生成互异（DEMON_FORM/VICIOUS/FEEL_NO_PAIN/JUGGLING）、原生完整对账 | `audit-power-potion` |
+| `blind-colorless-potion.json` / effects | Passed 35 项：同上 | `audit-colorless-potion` |
+| `blind-infernal-blade.json` / effects | Passed 26 项：同上（POMMEL_STRIKE/BLUDGEON/CONFLAGRATION×2） | `audit-infernal-blade` |
+| `blind-white-noise.json` / effects | Passed 26 项：同上 | `audit-white-noise` |
+| `blind-distraction.json` / effects | Passed 26 项：同上 | `audit-distraction` |
+| 既有 policy 场景回归 | Passed 13/14/9/9/10 项，与 2026-09-28 记录一致 | `regress-attack/skill/acid/stoke/gambler` |
+| Release 构建与 Windows 结构门禁 | Passed：Mod/最终宿主 0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=241` | 本轮命令输出 |
+
+新场景合计 209 项。每个候选执行约束首命令并在所有样本上评价；源原生根保持不变。全局可见字段白名单、内层提案乐观性、BundleOfJoy/CosmicConcoction 及生成后选一卡牌端仍未验收。
+
 ## 随机池与逐步观察策略（2026-09-28）
 
 配置与评分范围见[专项实现记录](strategy/blind-pool-policy-20260928.md)。共同配置为 M1、blind seed 902828、3 外层/3 内层样本、Beam 12、300 节点/3000 ms、内层 128 节点、12 命令/跨 3 回合、DOP1、Smart；证据根为仓库 `.local/blind-policy-20260928/`。

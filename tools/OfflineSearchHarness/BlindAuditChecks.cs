@@ -67,9 +67,20 @@ internal static class BlindAuditChecks
         if (mode == "effects")
         {
             PotionModel? potion = player.PotionSlots.FirstOrDefault(p => p != null);
-            command = potion == null ? Play("STOKE") : new(PlanActionKind.UsePotion, root.StartTurnNumber,
-                PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
-            Check(command.CardId == "STOKE" || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "OROBIC_ACID",
+            if (potion == null)
+            {
+                // Direct-generate-to-hand audits place exactly one audited pool card in the opening hand.
+                var handIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards
+                    .Select(card => card.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
+                command = Play(new[] { "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE" }.Single(handIds.Contains));
+            }
+            else
+            {
+                command = new(PlanActionKind.UsePotion, root.StartTurnNumber,
+                    PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
+            }
+            Check(command.CardId is "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
+                || command.PotionId is "ATTACK_POTION" or "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION" or "OROBIC_ACID",
                 "fixture contains one audited effect");
             PlanAction ResolveChoice(CombatRootSnapshot source)
             {

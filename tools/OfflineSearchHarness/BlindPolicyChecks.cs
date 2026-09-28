@@ -4,6 +4,7 @@ using CombatSolver.Engine.InCombat.Simulation;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
@@ -42,11 +43,14 @@ internal static class BlindPolicyChecks
         evidence.Add(new { stage = "command_nonanticipation", leftCommand, rightCommand });
 
         PotionModel? potion = root.PlayerIdentity.PotionSlots.FirstOrDefault(p => p != null);
-        if (potion?.Id.Entry is "SKILL_POTION" or "OROBIC_ACID")
+        if (potion?.Id.Entry is "SKILL_POTION" or "POWER_POTION" or "COLORLESS_POTION" or "OROBIC_ACID")
             Check(root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Energy == 0,
                 "zero-energy fixture is actually applied");
         PlanAction? potionCommand = potion == null ? null : new(PlanActionKind.UsePotion, root.StartTurnNumber,
             PotionId: potion.Id.Entry, PotionSlot: root.PlayerIdentity.GetPotionSlotIndex(potion));
+        PlanAction? poolCardCommand = potion == null ? FindHandPoolCardCommand(root) : null;
+        HashSet<string> openingHandIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity)
+            .Hand.Cards.Select(card => card.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
         if (potion != null && PotionChoiceSupport.GeneratesCardChoice(potion))
         {
             CombatBeamSolver driver = new(left, names, damage, policy, searchProfile: policy.Profile);
@@ -88,13 +92,43 @@ internal static class BlindPolicyChecks
         if (potionCommand != null)
             Check(result.Evaluations.Any(value => value.ActionKey == BlindCombatCommand.Key(potionCommand)),
                 "random pool action is evaluated even without discovery votes");
-        else
+        else if (poolCardCommand != null && poolCardCommand.CardId == "STOKE")
         {
             var lethal = result.ActionSummaries.Single(summary => summary.FirstAction.CardId == "BLUDGEON");
             var stoke = result.ActionSummaries.Single(summary => summary.FirstAction.CardId == "STOKE");
             Check(result.SelectedAction!.CardId == "BLUDGEON" && lethal.VictoryRate == 1 && lethal.MeanProjectedBattleHpLost == 0,
                 "certain immediate kill is retained instead of consuming that hand in Stoke");
             Check(lethal.MeanScore >= stoke.MeanScore, "Stoke includes the opportunity cost of the exhausted hand");
+        }
+        else if (poolCardCommand != null)
+        {
+            Check(result.Evaluations.Any(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)),
+                "random pool action is evaluated even without discovery votes");
+            string poolCardId = poolCardCommand.CardId!;
+            string killerId = poolCardId switch
+            {
+                "INFERNAL_BLADE" => "BLUDGEON",
+                "WHITE_NOISE" => "STRIKE_DEFECT",
+                _ => "STRIKE_SILENT",
+            };
+            var lethal = result.ActionSummaries.First(summary => summary.FirstAction.CardId == killerId);
+            var pool = result.ActionSummaries.First(summary => summary.FirstAction.CardId == poolCardId);
+            Check(result.SelectedAction!.CardId == killerId && lethal.VictoryRate == 1
+                && lethal.MeanProjectedBattleHpLost == 0,
+                "certain immediate kill is retained instead of spending the turn on the random pool");
+            Check(lethal.MeanScore >= pool.MeanScore, poolCardId + " carries the opportunity cost of the available kill");
+            var poolTrajectories = result.Evaluations
+                .Where(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)).ToArray();
+            Check(poolTrajectories.Length > 0 && poolTrajectories.All(value => value.ObservedActions.Count >= 2),
+                "post-generation observation makes a fresh follow-up decision");
+            if (poolCardId != "WHITE_NOISE")
+                Check(poolTrajectories.Any(value => value.ObservedActions.Skip(1).Any(
+                        action => action.Kind == PlanActionKind.PlayCard && !openingHandIds.Contains(action.CardId))),
+                    "post-generation observation plays the revealed card");
+        }
+        else
+        {
+            throw new InvalidOperationException("Policy fixture has no known random-pool source.");
         }
         Check(ContinuationStamp.CaptureLive(live).StateText == initialLive, "policy search leaves native state unchanged");
         evidence.Add(new { stage = "pool_matrix", result.SelectedAction, result.ActionSummaries, result.Evaluations,
@@ -130,5 +164,20 @@ internal static class BlindPolicyChecks
         File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-policy-checks.json"),
             JsonSerializer.Serialize(new { status = "Passed", checks, independentPolicySearchRuns = workRuns, evidence }, Program.Json));
         return $"checks={checks} Passed";
+    }
+
+    private static PlanAction? FindHandPoolCardCommand(CombatRootSnapshot root)
+    {
+        var hand = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards;
+        string? poolCardId = hand.Select(card => card.Preview.Id.Entry)
+            .FirstOrDefault(id => id is "STOKE" or "INFERNAL_BLADE" or "WHITE_NOISE" or "DISTRACTION");
+        if (poolCardId == null) return null;
+        var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
+        var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;
+        return new(PlanActionKind.PlayCard, root.StartTurnNumber, CardId: poolCardId,
+            TargetIndex: target == null ? -1 : 0, TargetCombatId: target?.CombatId,
+            CardStateKey: CardChoiceSupport.ChoiceCardKey(card),
+            CardUpgradeLevel: card.Preview.CurrentUpgradeLevel,
+            CardEnchantmentId: card.Preview.Enchantment?.Id.Entry ?? "");
     }
 }

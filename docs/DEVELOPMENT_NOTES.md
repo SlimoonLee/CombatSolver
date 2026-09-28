@@ -2,6 +2,7 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 2026-09-29 追加：验收 PowerPotion/ColorlessPotion 已有通道及直接生成到手牌的 InfernalBlade/WhiteNoise/Distraction，零行为源码改动，只扩展 `BlindPolicyChecks`/`BlindAuditChecks` 固定断言并新增 10 个夹具。五个新 policy 场景 61 项检查、五个新 effects 审计 148 项检查通过；既有场景回归一致。三个卡牌来源均验证"确定斩杀保留于随机池之上"的反例（BLUDGEON 领先 InfernalBlade 160000、打击牌领先 WhiteNoise/Distraction 240000/140000），药水来源验证 0 能量下免费选牌与原生选牌完整对账（实际选 STONE_ARMOR/JACK_OF_ALL_TRADES）。WhiteNoise 只断言生成后重观察而不断言打出生成牌：其夹具中敌 6 HP 下回合必死，不打出免费能力牌是正确决策；采纳级正例需与斩杀反例分开设计。证据见 `.local/blind-policy-20260929/`，报告见[随机池扩展验收](strategy/blind-pool-expansion-20260929.md)。
 - 本轮修正随机池遗漏与外层全知路径估值：`SolveBlind` 补齐当前动作枚举入口准入的全部合法首命令，每项在全部样本上执行有界观察轨迹；结算后 `ObservePrediction` 从影子状态形成观察，以独立内层 seed 提名下一命令。内层已复用 Coordinator 的 Smart 审计与跨回合计划入口；最终首动作评分不再直接使用外层样本最佳完整路线。
 - 新增 Blind 原生选择政策并设为默认：攻击/技能药水真实三张和跳过均用相同独立内层样本续搜；已支持的九种药水复用原 Prepare/Complete，普通卡牌/回合内选择复用可见牌优先级。未知原生来源或嵌套选择显式停止。原生选择取消先排空 worker 再释放模拟前缀。
 - 七个最小无头场景合计 94 项检查通过：攻击/技能药水、酸、添柴、弃牌重抽和跨回合正反例。攻击/技能药水及弃牌重抽的选中牌、费用、完成钩子、完整 continuation/RNG 与原生一致；技能/酸夹具另断言真实注入 0 能量。证据为 `.local/blind-policy-20260928/*-final`，当前配置与可读评分见[随机池与逐步观察策略](strategy/blind-pool-policy-20260928.md)。
