@@ -46,7 +46,7 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 | `--history-combats <n>` | 历史指导前缀最多 1..4 场，默认 1；遇非战斗边界停止 |
 | `--combat-decisions/--combat-turns` | 每场决策/回合上限，默认 200/20 |
 | `--combat-timeout-seconds <n>` | rollout 请求总时限，1..120 秒，默认 120；建局、战斗和领奖共用余量 |
-| `--native-choice-policy <p>` | `Stop`（默认）或 `FirstLegal`；后者按实际可见候选选最少张数 |
+| `--native-choice-policy <p>` | `Blind`（默认，观察候选后决策）、`Stop` 或 `FirstLegal`（选最少张数基线） |
 | `--character/--encounter/--seed/--ascension/--act-index` | 不给 `--request` 时直接指定一个新跑局 |
 | `--profile` | `Low\|Medium\|High\|VeryHigh\|Custom`（默认 `Custom`），预设值问模组自己要 |
 | `--beam/--nodes/--card-branches/--pile-branches/--hand-branches` | 覆盖预设的宽度、节点上限与分支上限 |
@@ -56,7 +56,11 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 | `--search-mode <m>` | `Evaluate`（默认）或 `Coordinator` |
 | `--blind-samples <n>` | 未知 RNG 样本数（1..64）；启用后必须使用 `Coordinator`，只输出聚合首动作 |
 | `--blind-seed <ulong>` | 派生样本 seed 的根值（默认 `1`） |
-| `--blind-aggregation <m>` | `Majority`、`MeanScore` 或 `RiskAverse`（默认 `Majority`） |
+| `--blind-aggregation <m>` | `Majority`、`MeanScore` 或 `RiskAverse`（默认 `MeanScore`） |
+| `--blind-policy-samples <n>` | 独立内层决策样本数（1..16，默认 3） |
+| `--blind-rollout-actions <n>` | 每首动作轨迹的命令上限（1..64，默认 12） |
+| `--blind-rollout-turns <n>` | 每首动作轨迹的跨回合上限（1..8，默认 3） |
+| `--blind-policy-nodes <n>` | 每个内层搜索的节点上限（1..4096，默认 128） |
 | `--blind-known-top <n>` | 观察者明确知道的抽牌堆顶张数（默认 0）；其余顺序独立采样 |
 | `--use-portfolio` | 开宽度组合，只对 `Coordinator` 有效 |
 | `--out/--label/--language/--verbose-game-log/--milestone` | 产物目录、标签、本地化语言码、是否打游戏日志、跑到 M1 还是 M2 |
@@ -83,19 +87,21 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
 
 `--seed` 构造真实战斗，`--blind-seed` 只生成未知未来的模型假设，两者用途独立。采样保留手牌和当前意图，替换未来 RNG、未知抽牌顺序和未来意图 forecast；默认不读取真实堆顶顺序作为已知信息。只有确实观察到堆顶时才提供 `--blind-known-top`。
 
-搜索先从每个样本发现首命令，再补入 EndTurn，将每个候选在全部样本上重新评估。`Majority` 比较发现阶段票数；`MeanScore` 比较完整矩阵均分；`RiskAverse` 先比较搜索结果存活比例，再比较最差四分之一战损、完整胜利比例和均分。后两种方式不会只平均某个动作赢得发现阶段的样本。
+搜索先从每个样本发现首命令，再补齐当前动作枚举入口准入的全部合法首命令，将每个候选在全部外层样本上执行。每一步结算后重新冻结观察，使用与外层 RNG/牌序无关的固定内层 seed 提名下一命令。`Majority` 比较外层轨迹分数投票；`MeanScore` 比较完整矩阵均分；`RiskAverse` 先比较已执行部分仍存活的比例，再比较最差四分之一战损、已完成胜利比例和均分。均值不只使用该动作赢得发现阶段的幸运样本。
 
-`--budget-ms` 是每样本发现阶段的软预算，评估阶段另将同等预算按候选数平分；`--nodes` 仍应用于各次搜索。K 个样本、C 个候选会发起 K 次 Coordinator 和 K*C 次约束 Beam 请求，总工作量看 `blindPolicy.TotalExpandedNodes` / `TotalTransitionCount` / `Elapsed`。普通 `solverMetrics` / `pruneCounters` 属于代表样本，`metricScope=representative_sample`，不能当作采样总量。blind 模式不接受 `--production-budget`、`--observe-portfolio` 或 `--portfolio-model`。
+`--budget-ms` 是每样本发现阶段的软预算，评估阶段另将同等预算按候选数平分；`--nodes` 应用于发现及诊断搜索，内层受 `--blind-policy-nodes` 约束。总请求数还包括轨迹每个决策及药水每项选择的独立内层 Coordinator，不再是固定 K+K*C 次。内层至少 25 ms/样本，单次结算与收尾可能超出软预算；相同配置不保证实际耗时或轨迹深度相同。总工作量看 `blindPolicy.TotalExpandedNodes` / `TotalTransitionCount` / `Elapsed`。普通 `solverMetrics` / `pruneCounters` 属于诊断代表样本，`metricScope=representative_sample`，不能当作采样总量。blind 模式不接受 `--production-budget`、`--observe-portfolio` 或 `--portfolio-model`。
 
-输出命令按 `Kind` 处理，可能是出牌、药水或 EndTurn。原 `PlanAction.IsExecutable` 仅表示卡牌/药水，不能用它过滤 blind 的 EndTurn。命令中的选择为空：发起动作后若出现选牌页，需要处理实际可见选择；在下一个稳定决策点重新采样。`--play-combat` 已覆盖原生动作后的稳定 Play 根；Mod 在线 UI、任意 mid-combat 存档恢复和采样选牌协议仍未接入。
+输出命令按 `Kind` 处理，可能是出牌、药水或 EndTurn。原 `PlanAction.IsExecutable` 仅表示卡牌/药水，不能用它过滤 blind 的 EndTurn。命令中的选择为空：发起动作后若出现选牌页，默认 Blind 处理实际可见选择；在下一个稳定决策点重新采样。`--play-combat` 已覆盖原生动作后的稳定 Play 根；Mod 在线 UI、任意 mid-combat 存档恢复和复杂原生嵌套选择仍未接入。
 
-这属于有限候选的确定化采样；每个样本内部仍按该样本的未来优化。搜索未走到终局时，预计战损及存活只覆盖已搜索前缀，完整胜利比例也不是经真实 rollout 校准的胜率。需要保留 `BoundaryReason`，不能据此声称严格随机策略最优。
+最终首动作价值来自可执行的外层轨迹，内层确定化搜索仍可能乐观地提名动作。药水选项评分的 `ValueScope=independent_determinized_choice_proposal` 只表示独立的选牌提案价值。外层的 `completed_policy_trajectory` 表示完成战斗，`observed_prefix_with_state_heuristic` 表示截断前缀加当前观察的启发式值；每项保留 `ObservedActions`、`Decisions`、`StopReason` 和 `BoundaryReason`。未完成项的扣血/存活只覆盖执行前缀，胜利比例也不是统计战斗胜率，不能声称严格随机策略最优。
 
 可选设置 `OFFLINE_HARNESS_BLIND_CHECKS=1`，在本次根上运行 121 项采样、RNG/Fork 隔离和聚合合同并写出 `blind-checks.json`。可重跑的小夹具为 `tools/OfflineSearchHarness/fixtures/blind-endturn.json` 与 `blind-potion.json`；分别覆盖零能量 EndTurn 和药水首命令约束。这些合同验证 blind 入口，不替代完整游戏的原生差分。
 
 设置 `OFFLINE_HARNESS_BLIND_AUDIT=effects`，配合 `--milestone M1` 和 `blind-attack-potion.json`、`blind-skill-potion.json`、`blind-orobic-acid.json` 或 `blind-stoke.json`，运行随机生成效果的隐藏输入扰动与原生完整 continuation/RNG 对账。`delayed` 配合 `blind-delayed-energy.json`，`immediate` 配合 `blind-delayed-energy-lethal.json`，核对跨回合能量及首动作选择；输出 `blind-audit.json`。专项入口会推进宿主内的原生战斗，应单独运行，不与正常 M2 搜索或 rollout 混用。配置、检查数和证明范围见[专项核查](strategy/blind-rng-audit-20260928.md)。
 
-此处的“隐藏输入独立性”仅覆盖已扰动的真实 RNG 和未知抽牌顺序。根中的怪物内部状态和第三方隐藏字段尚未完成可见性白名单核查，不能宣称整个入口严格只使用玩家可见信息。发现阶段用 Coordinator，首动作复评用普通 Beam，复杂长期计划的搜索能力也不完全一致。
+设置 `OFFLINE_HARNESS_BLIND_POLICY_CHECKS=1`，配合 `--milestone M1` 和五个 `blind-pool-*.json` 夹具，运行可执行轨迹、独立决策器的隐藏未来扰动、生成药水候选/跳过评分和原生选择对账，输出 `blind-policy-checks.json`。不要与其他专项开关或正常 M2 rollout 混用。本轮七个场景的 94 项检查、评分解释与剩余限制见[随机池与逐步观察策略](strategy/blind-pool-policy-20260928.md)。
+
+此处的“隐藏输入独立性”仅覆盖已扰动的真实 RNG 和未知抽牌顺序。根中的怪物内部状态和第三方隐藏字段尚未完成可见性白名单核查，不能宣称整个入口严格只使用玩家可见信息。内层已复用 Coordinator 的 Smart 审计和长期计划入口，但短预算不保证复杂计划搜索充分。
 
 ## 玩家存档与原生战斗推进
 
@@ -104,7 +110,7 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll `
     --run-save <current_run.save> --play-combat `
     --search-mode Coordinator --blind-samples 3 --blind-seed 902828 `
     --blind-aggregation MeanScore --beam 12 --nodes 300 --budget-ms 300 --dop 1 `
-    --native-choice-policy FirstLegal --combat-timeout-seconds 120 `
+    --native-choice-policy Blind --combat-timeout-seconds 120 `
     --out .local/blind-native/current
 ```
 
@@ -123,9 +129,8 @@ M2 和 `--blind-known-top 0`，不将开局堆顶知识传播到后续动作。
   这是历史指导前缀，不能作为精确手操回放；非战斗节点、不可用奖励或遭遇不符均显式停止。
 - 原生执行使用 `PlayCardAction`、`UsePotionAction`、`EndPlayerTurnAction`，先等待具体动作完成，
   再等待稳定 Play 或战斗结束；每条首命令后重新捕获根，样本选择和跨回合续用均不部署。
-- `Stop` 遇到需要决策的原生选牌会报告未支持；`FirstLegal` 只选实际候选中的前 `minSelect` 张，
-  是可见候选基线，不是未知 RNG 的采样选牌策略。战后选牌使用历史记录，不使用这条战斗内基线。
-  攻击/技能药水允许 0..1 张，因此 `FirstLegal` 会跳过，而搜索可能按选中最佳候选估值；尚不能据此评价这两类药水的实际决策质量。
+- `Blind` 对已支持的药水选择观察实际候选，再用同一组独立内层样本比较选项和跳过；其他有定义的卡牌选择复用可见牌优先级，未知来源或嵌套选择明确停止。本轮原生验收覆盖攻击药水、技能药水和弃牌重抽药水；其余已绑定来源不等于本轮全部通过。
+- `Stop` 遇到需要决策的原生选牌会报告未支持；`FirstLegal` 只选实际候选中的前 `minSelect` 张，是显式基线。攻击/技能药水允许 0..1 张，因此这条基线会跳过。战后选牌仍使用历史记录。
 - 建局、领奖、下一场准备和搜索共同扣除请求时限；耗尽后不启动下一条命令或下一场，
   `result.json` 返回 `Held` 和 `rolloutStopReason=TimeLimit`。限制为协作式停止，不中断正在运行的单个同步结算。
 - 保存后端始终为游戏的 `MemorySaveStore`，不会写回玩家存档。这里没有 Godot 进程或游戏实例目录；

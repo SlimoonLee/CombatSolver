@@ -36,6 +36,7 @@ internal sealed class CombatRootSnapshot
     public int TotalFloor { get; }
     public int InitialPlayerHp { get; }
     public int InitialPlayerMaxHp { get; }
+    internal bool IsPredictionObservation { get; private init; }
     public int InitialBrightestFlameMaxHpSpent
         => ((SimulatedCombatState)_rootSimulator.State.CombatState).BrightestFlameMaxHpSpent;
     public int PotionSlotCount { get; }
@@ -338,6 +339,49 @@ internal sealed class CombatRootSnapshot
 
     public CombatPredictionSimulator ForkSimulator() => _rootSimulator.Fork();
 
+    /// <summary>Freezes a completed simulated action as the next observation, without reading live state.</summary>
+    internal CombatRootSnapshot ObservePrediction(CombatPredictionSimulator source)
+    {
+        CombatPredictionSimulator simulator = source.Fork();
+        SimulatedCombatState combat = (SimulatedCombatState)simulator.State.CombatState;
+        SimPlayerCombatState playerState = simulator.State.GetPlayerCombatState(PlayerIdentity);
+        SimCreatureState player = simulator.State.GetCreature(PlayerIdentity.Creature);
+        int turn = combat.GetPlayerTurnNumber(PlayerIdentity);
+        Creature[] enemies = combat.Enemies.ToArray();
+        ulong aliveMask = 0;
+        for (int index = 0; index < enemies.Length; index++)
+            if (simulator.State.GetCreature(enemies[index]).IsAlive)
+                aliveMask |= 1UL << index;
+        PredictedCard[] cards = playerState.AllCards.ToArray();
+        RelicModel[] relics = combat.RelicsOf(PlayerIdentity).ToArray();
+        bool renewablePotion = relics.OfType<PetrifiedToad>().Any(relic => !relic.IsMelted);
+        PotionModel[] potions = Enumerable.Range(0, PotionSlotCount)
+            .Select(slot => combat.GetPotionAtSlot(PlayerIdentity, slot)).OfType<PotionModel>().ToArray();
+        SearchablePotionSlotSnapshot[] searchable = Enumerable.Range(0, PotionSlotCount)
+            .Select(slot => (Slot: slot, Potion: combat.GetPotionAtSlot(PlayerIdentity, slot)))
+            .Where(item => item.Potion != null && combat.IsPotionAvailable(PlayerIdentity, item.Slot)
+                && PotionOnUseSupport.CanSearch(item.Potion))
+            .Select(item => new SearchablePotionSlotSnapshot(item.Slot, item.Potion!.Id.Entry,
+                PotionUsePolicy.StrategicHpCost(item.Potion, renewablePotion))).ToArray();
+        IntentForecast forecast = IntentForecaster.BuildSampled(simulator, SolverWeights.SetupValueHorizonTurns);
+        ContinuationStamp stamp = ContinuationStamp.CapturePredicted(PlayerIdentity, simulator, turn, forecast, turn);
+        return new(PlayerIdentity, Array.AsReadOnly(enemies), forecast, LiveCombatStamp.FromContinuation(stamp),
+            stamp, simulator, PlayerCount, turn, TotalFloor, player.CurrentHp, player.MaxHp, PotionSlotCount,
+            Array.AsReadOnly(searchable), aliveMask, combat.CurrentSide, playerState.Phase,
+            EncounterRoomType, BossHpRelief, 0, cards.Length,
+            cards.Where(card => card.OwnerPile?.Type != MegaCrit.Sts2.Core.Entities.Cards.PileType.Exhaust)
+                .Select(card => card.Preview.Id.Entry).ToFrozenSet(StringComparer.Ordinal),
+            cards.Any(card => HasHealingVariables(card.Preview.DynamicVars))
+                || combat.EffectivePowers().Any(power => power is RegenPower || HasHealingVariables(power.DynamicVars))
+                || potions.Any(potion => HasHealingVariables(potion.DynamicVars)),
+            StrategicHpRecoveryBound.HasOnlyPostCombatHealing(simulator, PlayerIdentity),
+            CombatHistoryDependencies.All, combat.EffectivePowers().Count, combat.RootHookListenerCount,
+            CapturedRunModSubscriberCount, CapturedCombatModSubscriberCount, CapturedBaseLibCardModifiers,
+            relics.OfType<ThrowingAxe>().Any(relic => !relic.IsMelted && !relic._usedThisCombat),
+            renewablePotion, CapturePostCombatRelicHeal(relics), PotionRewardOutlook.None)
+        { IsPredictionObservation = true };
+    }
+
     /// <summary>
     /// Samples future RNG and the unknown draw order from a frozen root. Known top cards
     /// are supplied explicitly by the observer; no shuffle hook or history event is emitted.
@@ -395,6 +439,7 @@ internal sealed class CombatRootSnapshot
             HasUnusedCardReplayAllocator,
             HasRenewablePotionShapedRock,
             PostCombatRelicHeal,
-            PotionRewardOutlook.None);
+            PotionRewardOutlook.None)
+        { IsPredictionObservation = this.IsPredictionObservation };
     }
 }

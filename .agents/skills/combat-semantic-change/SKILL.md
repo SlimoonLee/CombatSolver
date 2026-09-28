@@ -93,6 +93,7 @@ writeLive 和 writePredicted，复用 store 的 Fork context。状态描述按�
 ## 4. 隔离与失败语义
 
 - blind RNG 入口只在稳定单人 Play 根采样；九条未来 RNG、未知抽牌顺序、未来意图 forecast 和后续怪物创建的 run RNG 必须一起替换。只保留观察者显式声明的已知堆顶，不触发原生洗牌事件；采样戳重新计算。首命令去除样本选择和续用，在线选择必须重新观察。每个候选在全部样本上评估，不能只平均获胜样本；`BlindSearchContracts` 覆盖隐藏输入独立性、九流/Fork 隔离和聚合反例。根未修改必须在搜索后重捕获 live 与影子状态证明；采样合同不代替原生语义差分。
+- blind 外层估值执行逐步观察轨迹，内层 seed 不得由外层隐藏 RNG/牌序派生。`ObservePrediction` 只能冻结完成动作后的影子状态，模拟观察的首动作合法性不得回读 live。药水观察前缀复用原 Prepare/Complete；原生选择只匹配已经可见的逐实例候选，取消后排空 worker 再释放前缀。验证使用分别新建的决策器扰动外层未来，不能只靠同一缓存命中；原生完整 continuation/RNG 对账与内层提案分数分开报告。怪物内部状态/第三方字段未完成白名单核查时，不声称全局只用可见信息。
 - worker 只消费 `CombatRootSnapshot`，不补做 live 捕获。
 - 真实 Model 只作稳定身份、类型或根阶段只读元数据。
 - 写卡牌前取得 `PredictedCard.MutablePreview`；不得写 `Original`。

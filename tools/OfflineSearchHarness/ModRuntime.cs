@@ -336,7 +336,11 @@ internal static class ModRuntime
             BlindSearchOptions.GenerateSampleSeeds(options.BlindSeed, options.BlindSamples),
             aggregation,
             options.BudgetMilliseconds,
-            options.BlindKnownTopDrawCards);
+            options.BlindKnownTopDrawCards,
+            PolicySamples: options.BlindPolicySamples,
+            MaxRolloutActions: options.BlindRolloutActions,
+            MaxRolloutTurns: options.BlindRolloutTurns,
+            MaxPolicyExpandedNodes: options.BlindPolicyNodes);
         return CombatSearchCoordinator.SolveBlind(
             root, names, damage, policy, blindOptions, cancellationToken);
     }
@@ -349,6 +353,9 @@ internal static class ModRuntime
             selectedAction = result.SelectedAction,
             requiresReobserve = true,
             metricScope = "representative_sample",
+            evaluationPolicy = "resampled_observation_rollout",
+            voteSource = "policy_trajectory_scores",
+            partialLossScope = "executed_prefix_only",
             result.SearchRuns,
             result.TotalExpandedNodes,
             result.TotalTransitionCount,

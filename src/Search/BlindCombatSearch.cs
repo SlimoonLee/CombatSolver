@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using CombatSolver.Engine.InCombat.Simulation;
 using MegaCrit.Sts2.Core.Combat;
 
 namespace CombatSolver;
@@ -14,9 +15,14 @@ internal enum BlindAggregationMode
 /// <summary>Independent hypotheses about hidden draw order and future combat RNG.</summary>
 internal sealed record BlindSearchOptions(
     IReadOnlyList<ulong> SampleSeeds,
-    BlindAggregationMode Aggregation = BlindAggregationMode.Majority,
+    BlindAggregationMode Aggregation = BlindAggregationMode.MeanScore,
     int? PerSampleBudgetMilliseconds = null,
-    int KnownTopDrawCards = 0)
+    int KnownTopDrawCards = 0,
+    ulong DecisionSeed = 0xC6BC279692B5CC83UL,
+    int PolicySamples = 3,
+    int MaxRolloutActions = 12,
+    int MaxRolloutTurns = 3,
+    int MaxPolicyExpandedNodes = 128)
 {
     internal static IReadOnlyList<ulong> GenerateSampleSeeds(ulong baseSeed, int count)
     {
@@ -50,6 +56,9 @@ internal sealed record BlindSearchOptions(
         if (PerSampleBudgetMilliseconds is <= 0)
             throw new ArgumentOutOfRangeException(nameof(PerSampleBudgetMilliseconds));
         ArgumentOutOfRangeException.ThrowIfNegative(KnownTopDrawCards);
+        if (PolicySamples is < 1 or > 16 || MaxRolloutActions is < 1 or > 64
+            || MaxRolloutTurns is < 1 or > 8 || MaxPolicyExpandedNodes is < 1 or > 4096)
+            throw new ArgumentOutOfRangeException(nameof(PolicySamples), "Invalid blind rollout bounds.");
     }
 }
 
@@ -114,7 +123,14 @@ internal sealed record BlindSearchEvaluation(
     bool Survives,
     bool CompleteVictory,
     SearchBoundaryReason BoundaryReason,
-    TimeSpan Elapsed);
+    TimeSpan Elapsed)
+{
+    public int Decisions { get; init; }
+    public string ValueScope { get; init; } = "determinized_plan";
+    public string StopReason { get; init; } = "search_boundary";
+    public IReadOnlyList<PlanAction> ObservedActions { get; init; } = [];
+    public IReadOnlyList<BlindPotionChoiceResult> PotionChoices { get; init; } = [];
+}
 
 internal sealed record BlindSearchActionSummary(
     string FirstActionKey,
@@ -161,7 +177,7 @@ internal static partial class CombatSearchCoordinator
         Stopwatch watch = Stopwatch.StartNew();
         List<BlindSearchSampleSummary> samples = [];
         Dictionary<string, PlanAction> candidates = new(StringComparer.Ordinal);
-        List<(BlindSearchEvaluation Evidence, SolverResult Result)> evaluations = [];
+        List<BlindSearchEvaluation> evaluations = [];
         SolverResult? representative = null;
         long expanded = 0, transitions = 0;
         int runs = 0;
@@ -208,53 +224,53 @@ internal static partial class CombatSearchCoordinator
         if (candidates.Count == 0 && representative!.Snapshot.AllEnemiesDead)
             return new(representative, null, "<none>", options.Aggregation, samples, [], [],
                 runs, expanded, transitions, watch.Elapsed);
-        PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber);
-        candidates.TryAdd(BlindCombatCommand.Key(endTurn), endTurn);
 
-        // Every candidate sees every sample, including samples where it did not win discovery.
-        // The second stage shares one additional per-sample budget among the candidate searches.
+        // Pool effects must remain eligible even if no clairvoyant discovery sample nominated them.
+        CombatRootSnapshot observedRoot = root.ForkForSample(options.DecisionSeed, options.KnownTopDrawCards);
+        CombatBeamSolver observer = new(observedRoot, displayNames, battleDamage, samplePolicy, cancellationToken,
+            searchProfile: samplePolicy.Profile);
+        SimulationSnapshot observation = observer.ObserveBlindState();
+        try
+        {
+            foreach (PlanAction command in observer.EnumerateBlindCommands(observation))
+                candidates.TryAdd(BlindCombatCommand.Key(command), command);
+        }
+        finally { observation.ReleaseSimulator(); }
+
         int candidateBudget = Math.Max(1, budget / candidates.Count);
+        BlindContinuationPolicy continuationPolicy = new(root, displayNames, battleDamage, samplePolicy,
+            options, Math.Max(1, candidateBudget / options.MaxRolloutActions), cancellationToken, RecordWork,
+            count => transitions += count);
+        using IDisposable isolation = SimulationNotificationIsolation.Enter();
         foreach ((string key, PlanAction command) in candidates.OrderBy(item => item.Key, StringComparer.Ordinal))
         foreach (ulong seed in seeds)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            CombatRootSnapshot sampleRoot = root.ForkForSample(seed, options.KnownTopDrawCards);
-            SearchRequestWorkTotals totals = new();
-            SearchPolicySnapshot evaluationPolicy = samplePolicy with
-            {
-                RequestWorkTotals = totals,
-                PortfolioTelemetry = null,
-                Profile = samplePolicy.Profile with { SoftTimeBudgetMilliseconds = candidateBudget },
-            };
-            SolverResult result = new CombatBeamSolver(sampleRoot, displayNames, battleDamage,
-                evaluationPolicy, cancellationToken, searchProfile: evaluationPolicy.Profile,
-                initialActionConstraint: command).Solve();
-            SearchRequestWorkSnapshot work = totals.Snapshot();
-            result.TotalExpandedNodes = work.ExpandedNodes;
-            result.TotalTransitionCount = work.TransitionCount;
-            result.TotalChoiceBranchesEvaluated = work.ChoiceBranchesEvaluated;
-            result.TotalSearchElapsed = work.Elapsed;
-            RecordWork(result);
-            PlanAction? actual = BlindFirstAction(root.StartTurnNumber, result);
-            if (actual == null || !BlindCombatCommand.Matches(command, actual))
-                throw new InvalidOperationException("Blind candidate search did not evaluate its initial command. "
-                    + $"action={key} boundary={result.BoundaryReason}");
-            evaluations.Add((new(seed, key, result.BestNode.Score, result.ProjectedBattleHpLost,
-                !result.Snapshot.PlayerDead && result.Snapshot.ProjectedPlayerHp > 0,
-                IsCompleteVictory(result), result.BoundaryReason, result.TotalSearchElapsed), result));
+            BlindSearchEvaluation evaluation = continuationPolicy.Evaluate(command, seed, candidateBudget);
+            evaluations.Add(evaluation);
+            transitions += evaluation.Decisions;
+            policy.Diagnostics.Info($"[CombatSolver/Blind] policy sample={seed} action={key} "
+                + $"hp_lost={evaluation.ProjectedBattleHpLost} scope={evaluation.ValueScope} stop={evaluation.StopReason}");
         }
 
+        Dictionary<string, int> policyVotes = evaluations.GroupBy(value => value.SampleSeed)
+            .Select(group => group.OrderByDescending(value => value.Score)
+                .ThenBy(value => value.ActionKey, StringComparer.Ordinal).First().ActionKey)
+            .GroupBy(key => key).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         BlindSearchActionSummary[] summaries = candidates.Select(candidate =>
         {
-            BlindSearchEvaluation[] values = evaluations.Where(run => run.Evidence.ActionKey == candidate.Key)
-                .Select(run => run.Evidence).ToArray();
+            BlindSearchEvaluation[] values = evaluations.Where(run => run.ActionKey == candidate.Key).ToArray();
             return SummarizeBlindAction(candidate.Key, candidate.Value,
-                samples.Count(sample => sample.FirstActionKey == candidate.Key), values);
+                policyVotes.GetValueOrDefault(candidate.Key), values);
         }).ToArray();
         BlindSearchActionSummary selected = SelectBlindAction(summaries, options.Aggregation);
-        representative = evaluations.First(run => run.Evidence.ActionKey == selected.FirstActionKey).Result;
+        // This route is explicitly diagnostic. Deployment receives only SelectedAction.
+        representative = new CombatBeamSolver(root.ForkForSample(seeds[0], options.KnownTopDrawCards),
+            displayNames, battleDamage, samplePolicy, cancellationToken, searchProfile: samplePolicy.Profile,
+            initialActionConstraint: selected.FirstAction).Solve();
+        RecordWork(representative);
         return new(representative, selected.FirstAction, selected.FirstActionKey, options.Aggregation,
-            samples, evaluations.Select(run => run.Evidence).ToArray(),
+            samples, evaluations.ToArray(),
             summaries.OrderByDescending(item => item.VoteCount).ThenBy(item => item.FirstActionKey,
                 StringComparer.Ordinal).ToArray(), runs, expanded, transitions, watch.Elapsed);
     }

@@ -338,7 +338,9 @@ internal sealed partial class CombatBeamSolver
         PotionChoiceFrame? potionChoiceFrame = null,
         bool countTransition = true,
         bool allowExecutionCapture = true,
-        ContinuationCapture? continuationCapture = null)
+        ContinuationCapture? continuationCapture = null,
+        Func<TurnStartChoiceRequest, PlanCardChoice?>? observedChoicePolicy = null,
+        bool allowChoiceContinuationFallback = true)
     {
         _run.WorkPacer.YieldIfNeeded();
         CombatPredictionSimulator simulator;
@@ -421,7 +423,7 @@ internal sealed partial class CombatBeamSolver
                             processedEnemyDeaths, ref shufflesCrossed, action.TurnStartChoices, roundCheckpoint)
                         : AdvanceRound(simulator, simulatedCombat, turn - _startTurnNumber,
                             processedEnemyDeaths, ref shufflesCrossed, action.TurnStartChoices,
-                            roundCheckpointCapture);
+                            roundCheckpointCapture, observedChoicePolicy);
                 }
                 finally
                 {
@@ -454,7 +456,9 @@ internal sealed partial class CombatBeamSolver
                 int potionShuffleEvents = potionChoiceFrame?.ShuffleEventsBefore ?? simulator.ShuffleEventCount;
                 int potionHistoryEntryStart = potionChoiceFrame?.HistoryStart ?? simulator.History.Entries.Count;
                 SearchMeasurement potionMeasurement = _run.Performance.Begin();
-                simulatedCombat.BeginActionChoices(action.NestedChoices);
+                simulatedCombat.BeginActionChoices(observedChoicePolicy == null
+                    ? new TurnStartChoiceCursor(action.NestedChoices)
+                    : TurnStartChoiceCursor.ForAutomaticPolicy(observedChoicePolicy));
                 try
                 {
                     if (potionChoiceFrame == null && !PotionExecutionSupport.Prepare(
@@ -486,7 +490,8 @@ internal sealed partial class CombatBeamSolver
                 }
                 simulator.CheckWinCondition(simulatedCombat.GetPlayerTurnNumber(_player));
                 boundary = ResolveRequestedPlayerTurnEnd(
-                    simulator, simulatedCombat, action, processedEnemyDeaths, ref turn, ref shufflesCrossed);
+                    simulator, simulatedCombat, action, processedEnemyDeaths, ref turn, ref shufflesCrossed,
+                    observedChoicePolicy);
                 LogAnnotatedReplayState(simulator, action, priorActionCount + actionOffset, turn, replayEvidence);
                 continuationCapture?.Observe(this, simulator, priorActionCount + actionOffset, turn, boundary);
                 continue;
@@ -524,7 +529,9 @@ internal sealed partial class CombatBeamSolver
             int shuffleEvents = cardChoiceFrame?.ShuffleEventsBefore ?? simulator.ShuffleEventCount;
             bool capturingChoice = cardChoiceCapture != null && simulator.BeginManualCardChoiceCapture(card);
             SearchMeasurement cardExecutionMeasurement = _run.Performance.Begin();
-            simulatedCombat.BeginActionChoices(ActionChoicesForReplay(action));
+            simulatedCombat.BeginActionChoices(observedChoicePolicy == null
+                ? new TurnStartChoiceCursor(ActionChoicesForReplay(action))
+                : TurnStartChoiceCursor.ForAutomaticPolicy(observedChoicePolicy));
             using IDisposable cardExecutionScope =
                 simulatedCombat.BeginCardExecutionScope(processedEnemyDeaths);
             bool cardPlayCompleted;
@@ -575,7 +582,8 @@ internal sealed partial class CombatBeamSolver
             // servicing a requested turn end. A lethal forced-end card never starts a round.
             simulator.CheckWinCondition(simulatedCombat.GetPlayerTurnNumber(_player));
             boundary = ResolveRequestedPlayerTurnEnd(
-                simulator, simulatedCombat, action, processedEnemyDeaths, ref turn, ref shufflesCrossed);
+                simulator, simulatedCombat, action, processedEnemyDeaths, ref turn, ref shufflesCrossed,
+                observedChoicePolicy);
             LogAnnotatedReplayState(simulator, action, priorActionCount + actionOffset, turn, replayEvidence);
             if (continuationCapture != null)
             {
@@ -593,7 +601,8 @@ internal sealed partial class CombatBeamSolver
                 simulator.CapturedExecutionFrame<PlayerStartFrame>()?.Progress));
         }
         finally { if (capturingExecution) simulator.EndExecutionContinuationCapture(); }
-        if ((cardChoiceFrame != null || potionChoiceFrame != null) && boundary == SearchBoundaryReason.PendingChoice)
+        if (allowChoiceContinuationFallback
+            && (cardChoiceFrame != null || potionChoiceFrame != null) && boundary == SearchBoundaryReason.PendingChoice)
         {
             // This is the same logical choice attempt. The extra physical fork is observable,
             // but cannot spend a second transition or branch-budget lease. All child scopes have
@@ -626,14 +635,15 @@ internal sealed partial class CombatBeamSolver
         PlanAction action,
         ForkableSet<uint> processedEnemyDeaths,
         ref int turn,
-        ref int shufflesCrossed)
+        ref int shufflesCrossed,
+        Func<TurnStartChoiceRequest, PlanCardChoice?>? observedChoicePolicy = null)
     {
         bool requested = combat.ConsumePlayerTurnEndRequest();
         if (!requested || !simulator.IsInProgress)
             return SearchBoundaryReason.None;
         SearchBoundaryReason boundary = AdvanceRound(
             simulator, combat, turn - _startTurnNumber, processedEnemyDeaths,
-            ref shufflesCrossed, action.TurnStartChoices);
+            ref shufflesCrossed, action.TurnStartChoices, observedChoicePolicy: observedChoicePolicy);
         if (boundary == SearchBoundaryReason.None && !SettleReplayActionBoundary(simulator, combat))
             boundary = SearchBoundaryReason.PendingChoice;
         _ = combat.ConsumePlayerTurnEndRequest();
@@ -968,7 +978,8 @@ internal sealed partial class CombatBeamSolver
         ISet<uint> processedEnemyDeaths,
         ref int shufflesCrossed,
         IReadOnlyList<PlanCardChoice>? turnStartChoices,
-        RoundReplayCheckpointCapture? roundCheckpointCapture = null)
+        RoundReplayCheckpointCapture? roundCheckpointCapture = null,
+        Func<TurnStartChoiceRequest, PlanCardChoice?>? observedChoicePolicy = null)
     {
         if (!simulator.IsInProgress)
             return SearchBoundaryReason.None;
@@ -976,7 +987,9 @@ internal sealed partial class CombatBeamSolver
         IReadOnlyList<PlanCardChoice>? roundChoicePlans = turnStartChoices?
             .Where(choice => choice.Effect != PlanChoiceEffect.ApplyKnowledgeCurse)
             .ToArray();
-        TurnStartChoiceCursor roundChoices = new(roundChoicePlans);
+        TurnStartChoiceCursor roundChoices = observedChoicePolicy == null
+            ? new(roundChoicePlans)
+            : TurnStartChoiceCursor.ForAutomaticPolicy(observedChoicePolicy);
         simulatedCombat.BeginActionChoices(roundChoices);
         simulatedCombat.SetActionChoiceTiming(PlanChoiceTiming.PlayerTurnEnd);
         try

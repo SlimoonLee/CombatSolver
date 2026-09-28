@@ -38,6 +38,26 @@ foreach ($relative in @('src/Search/RouteQuality.cs', 'src/Search/RouteQualityPo
         $violations.Add("Route quality model missing: $relative")
     }
 }
+$blindCoordinatorSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'src/Search/BlindCombatSearch.cs') -Raw
+$blindPolicySource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'src/Search/BlindCombatPolicy.cs') -Raw
+$blindReplaySource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'src/Search/CombatBeamSolver.Blind.cs') -Raw
+if (-not $blindCoordinatorSource.Contains('observer.EnumerateBlindCommands(observation)') -or
+    -not $blindCoordinatorSource.Contains('continuationPolicy.Evaluate(command, seed, candidateBudget)') -or
+    -not $blindCoordinatorSource.Contains('policyVotes = evaluations.GroupBy')) {
+    $violations.Add('Blind candidate coverage, observed rollout or trajectory votes missing')
+}
+if ($blindPolicySource.Contains('CombatRootSnapshot.Capture(') -or
+    -not $blindPolicySource.Contains('observation.ForkForSample(seed)') -or
+    -not $blindPolicySource.Contains('ChooseCommand(trajectory.ObservePrediction(state.Simulator))') -or
+    -not $blindReplaySource.Contains('PotionExecutionSupport.Prepare(') -or
+    -not $blindReplaySource.Contains('observedChoicePolicy: observedChoicePolicy')) {
+    $violations.Add('Blind continuation must resample observations and reuse simulated action semantics')
+}
+$blindRootSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'src/Runtime/CombatRootSnapshot.cs') -Raw
+if (-not $blindRootSource.Contains('internal CombatRootSnapshot ObservePrediction(') -or
+    -not $blindRootSource.Contains('IsPredictionObservation = true')) {
+    $violations.Add('Predicted observation roots must be identified without live capture')
+}
 if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'src/Search/PotionValuationRegistry.cs') -PathType Leaf)) {
     $violations.Add('Potion valuation registry missing')
 }
@@ -1077,6 +1097,7 @@ $expectedBeamFiles = @(
     "CombatBeamSolver.BeamRetentionPolicy.Routing.cs",
     "CombatBeamSolver.BeamRetentionPolicy.Testing.cs",
     "CombatBeamSolver.AfterimageFrontloading.cs",
+    "CombatBeamSolver.Blind.cs",
     "CombatBeamSolver.BlockPotionInsertion.cs",
     "CombatBeamSolver.CrossTurnPlanning.cs",
     "CombatBeamSolver.CyclePlanning.cs",

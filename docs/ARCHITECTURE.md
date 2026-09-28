@@ -134,15 +134,19 @@ Smart 药水梯度的层前后转移采样及协调器回收开销归入上下�
 
 未来意图由 `IntentForecaster.BuildSampled` 从采样分支重建，不沿用 live RNG 生成的未来 forecast；该启发式 forecast 明确省略未来战斗效果。样本的 Live/ContinuationStamp 重新计算，确定药水奖励预测关闭。`SimulatedCombatState` 保存只读的采样 run RNG 快照并随 Fork 继承，后续创建怪物也使用采样快照。
 
-`CombatSearchCoordinator.SolveBlind` 分两步复用既有语义：先对每个样本运行 Coordinator，收集首个命令并补入 EndTurn；再对每个候选、每个样本运行带 `initialActionConstraint` 的 Beam 搜索。约束在串行/并行卡牌、药水和结束回合准备入口生效，worker 继承同一约束，后续动作照常展开；普通确定性搜索的约束为 null。每个候选的均值和最差四分之一战损都来自完整评估矩阵，不能只使用该候选赢得发现阶段的样本。
+`CombatSearchCoordinator.SolveBlind` 先用 Coordinator 发现首命令，再经 `CombatBeamSolver.Blind.EnumerateBlindCommands` 补齐当前枚举入口准入的全部合法首命令。每个候选、每个外层样本由 `BlindContinuationPolicy.Evaluate` 执行有界轨迹：结算首命令后逐步观察并独立提名下一命令，最终均值和最差四分之一战损来自完整矩阵，不能只使用该候选赢得发现阶段的样本。带 `initialActionConstraint` 的确定化路线仍供诊断；普通确定性搜索的约束为 null。
 
-`Majority` 先比较发现阶段票数，再比较矩阵均分；`MeanScore` 先比较矩阵均分；`RiskAverse` 依次比较搜索结果仍存活的比例、最差四分之一战损、完整胜利比例和均分。命令包括卡牌、药水或 EndTurn；`BlindCombatCommand` 去掉样本中的选牌、嵌套选择、下回合选择和预测遗物效果。发起命令后，选择页面和下一稳定决策点都需要重新观察。
+`Majority` 从外层轨迹分数投票，再比较矩阵均分；默认 `MeanScore` 先比较矩阵均分；`RiskAverse` 依次比较已执行部分仍存活的比例、最差四分之一战损、已完成胜利比例和均分。命令包括卡牌、药水或 EndTurn；`BlindCombatCommand` 去掉样本中的选牌、嵌套选择、下回合选择和预测遗物效果。发起命令后，选择页面和下一稳定决策点都需要重新观察。
 
-该入口当前是 `internal`，由 `tools/OfflineSearchHarness` 使用。`blindPolicy` 导出样本 seed、发现证据、完整评估矩阵、动作统计及全部搜索工作量；代表性 `SolverResult` 仅用于诊断，不能作为 live route 或续用缓存。宿主不导出原根 RNG 戳、隐藏牌序或样本续用计划，搜索后重新捕获 live 状态和冻结影子状态验证根未被修改。Mod 在线 UI、可见状态序列化协议和采样选牌续接尚未接入。
+`CombatRootSnapshot.ObservePrediction` 只从完成动作后的影子状态形成新的冻结根，刷新回合、阵容、HP、卡牌/药水/遗物元数据、forecast 和历史依赖，不做 live 捕获。`IsPredictionObservation` 阻止模拟观察的首动作枚举调用 live `Original.CanPlayTargeting`。`BlindContinuationPolicy` 拥有独立于外层 RNG/牌序的内层 seed、命令/选择缓存、轨迹边界与叶子评分。内层 Coordinator 仅产生提案；外层按实际观察和命令执行估值。所有缓存限一次 SolveBlind，键由重新采样的观察形成。
 
-离线 `SavedCombatSetup` 独占原生战前材料恢复、当前 schema/扩展门禁和完整规范化 run 对账；通过后继续已保存坐标，不重复地图历史。`HistoryCombatSetup` 独占 `.run` 指导的新局前缀、原生远古之民/节点/奖励匹配；因记录缺少坐标与解锁状态，它不是精确手操回放。`CombatRollout` 只部署去掉样本选择与续用的首命令，经原生动作队列完成后等待稳定 Play，再捕获新根重新求解；搜索共享请求剩余时限及取消令牌。`ObservedCardSelector` 处理实际可见候选，默认 Stop，显式 FirstLegal 仅为选最少张的基线。游戏保存后端始终是 `MemorySaveStore`，日志与恢复副本只写测试产物目录。原生 rollout 不替代完整 actual/simulated 差分；用法与绕过点见[离线宿主](OFFLINE_SEARCH_HARNESS.md)，9 场结果见[实测报告](strategy/blind-native-rollout-20260928.md)。
+`CombatBeamSolver.Blind` 提供动作枚举、单命令回放与药水 Prepare/Complete 薄入口，复用既有模拟语义；`Replay` 的可选 `observedChoicePolicy` 通过原自动 cursor 处理卡牌、药水、强制回合结束和 EndTurn 选择。普通确定性调用默认无回调。药水选择在实际候选已生成后逐选项独立采样续搜，内层提案分数标记为 `independent_determinized_choice_proposal`。截断叶子只对重新采样当前观察的状态启发式评分，不消费确定化尾部计划。
 
-这是有限候选的采样近似：候选来自各样本的最佳首命令；后续搜索仍针对各自确定化未来优化。均分不是严格的部分可观测策略价值，存活/胜利比例也不是经真实 rollout 校准的战斗胜率；搜索边界和代表样本的指标必须保留。
+该入口当前是 `internal`，由 `tools/OfflineSearchHarness` 使用。`blindPolicy` 导出样本 seed、发现证据、完整评估矩阵、动作统计及全部搜索工作量；每项评估保留实际命令、选择估值、停止原因和完整/截断范围。代表性 `SolverResult` 仅用于诊断，不能作为 live route 或续用缓存。宿主不导出原根 RNG 戳、隐藏牌序或样本续用计划，搜索后重新捕获 live 状态和冻结影子状态验证根未被修改。Mod 在线 UI 与可见状态序列化协议尚未接入。
+
+离线 `SavedCombatSetup` 独占原生战前材料恢复、当前 schema/扩展门禁和完整规范化 run 对账；通过后继续已保存坐标，不重复地图历史。`HistoryCombatSetup` 独占 `.run` 指导的新局前缀、原生远古之民/节点/奖励匹配；因记录缺少坐标与解锁状态，它不是精确手操回放。`CombatRollout` 只部署去掉样本选择与续用的首命令，经原生动作队列完成后等待稳定 Play，再捕获新根重新求解；搜索共享请求剩余时限及取消令牌。`ObservedCardSelector` 默认 Blind，`BlindNativeChoices` 独占动作来源绑定、可见候选匹配和选择边界的主线程捕获；已支持的药水选择调用同一独立内层估值，普通卡牌选择复用可见牌优先级，未知来源/嵌套选择显式失败。取消时排空选择 worker 后释放模拟前缀。Stop/FirstLegal 仍为显式基线。游戏保存后端始终是 `MemorySaveStore`，日志与恢复副本只写测试产物目录。原生 rollout 不替代完整 actual/simulated 差分；用法见[离线宿主](OFFLINE_SEARCH_HARNESS.md)，旧 9 场结果见[实测报告](strategy/blind-native-rollout-20260928.md)。
+
+这是有界采样近似。内层全知提案可能有偏差，外层估值使用可执行轨迹；未完成轨迹只拥有前缀扣血与状态启发式值。软时间预算及观察缓存可使不同候选到达不同深度。存活/胜利比例不是统计战斗胜率，完整根也未完成怪物内部状态及第三方隐藏字段的可见性白名单核查；不能宣称严格可见信息或部分可观测最优策略。当前验证与限制见[随机池与逐步观察策略](strategy/blind-pool-policy-20260928.md)。
 
 ### 单一搜索预算与兼容边界
 

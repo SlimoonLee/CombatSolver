@@ -187,6 +187,9 @@ internal static class Program
             if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_BLIND_AUDIT") is { Length: > 0 } audit)
                 Step(steps, "Blind information and delayed-benefit audit", () =>
                     BlindAuditChecks.Run(combat!, options, loop, audit));
+            if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_BLIND_POLICY_CHECKS") == "1")
+                Step(steps, "Blind observed policy and random-pool checks", () =>
+                    BlindPolicyChecks.Run(combat!, options, loop));
             payload["budget"] = DescribeBudget(options);
             payload["root"] = OfflineCombat.DescribeRoot(combat!);
             string diagnostics = options.BlindSamples > 0
@@ -484,7 +487,7 @@ internal sealed record HarnessOptions
           --combat-decisions <n> 整场决策上限（默认 200）
           --combat-turns <n>     整场回合上限（默认 20）
           --combat-timeout-seconds <n> 请求总时限（1..120，默认 120）
-          --native-choice-policy <p> Stop（默认）|FirstLegal（只按实际可见候选选最少张）
+          --native-choice-policy <p> Blind（默认，观察后选牌）|Stop|FirstLegal
           --label <name>         本根标签（写进 result.json，默认 offline）
           --character <id>       角色（无 --request 时用，默认 IRONCLAD）
           --encounter <id>       遭遇（无 --request 时用，默认 FUZZY_WURM_CRAWLER_WEAK）
@@ -503,7 +506,11 @@ internal sealed record HarnessOptions
           --search-mode <m>      Evaluate（单次求解，不经协调器，默认）| Coordinator（生产协调器）
           --blind-samples <n>    未知 RNG 采样数；启用后复用 Coordinator，只输出聚合首动作
           --blind-seed <ulong>   采样 seed 生成器的根值（默认 1）
-          --blind-aggregation <m> Majority|MeanScore|RiskAverse（默认 Majority）
+          --blind-aggregation <m> Majority|MeanScore|RiskAverse（默认 MeanScore）
+          --blind-policy-samples <n> 内层独立决策样本数，默认 3
+          --blind-rollout-actions <n> 首动作复评的最大动作数，默认 12
+          --blind-rollout-turns <n> 首动作复评的最大跨回合数，默认 3
+          --blind-policy-nodes <n> 每个内层决策搜索的节点上限，默认 128
           --blind-known-top <n>  观察者已知的抽牌堆顶张数（默认 0）；其余牌序独立采样
           --use-portfolio        开宽度组合（只对 --search-mode Coordinator 有效）
           --no-plain-baseline    消融：丢掉普通基线成员（需 --use-portfolio）
@@ -553,7 +560,7 @@ internal sealed record HarnessOptions
     public int CombatDecisionLimit { get; init; } = 200;
     public int CombatTurnLimit { get; init; } = 20;
     public int CombatTimeoutSeconds { get; init; } = 120;
-    public string NativeChoicePolicy { get; init; } = "Stop";
+    public string NativeChoicePolicy { get; init; } = "Blind";
     public string Label { get; init; } = "offline";
     public string Profile { get; init; } = "Custom";
     public int? Beam { get; init; }
@@ -567,8 +574,12 @@ internal sealed record HarnessOptions
     public string SearchMode { get; init; } = "Evaluate";
     public int BlindSamples { get; init; }
     public ulong BlindSeed { get; init; } = 1;
-    public string BlindAggregation { get; init; } = "Majority";
+    public string BlindAggregation { get; init; } = "MeanScore";
     public int BlindKnownTopDrawCards { get; init; }
+    public int BlindPolicySamples { get; init; } = 3;
+    public int BlindRolloutActions { get; init; } = 12;
+    public int BlindRolloutTurns { get; init; } = 3;
+    public int BlindPolicyNodes { get; init; } = 128;
     /// <summary>开宽度组合（协调器的组合成员通道）；Evaluate 模式下没有意义。</summary>
     public bool UsePortfolio { get; init; }
     /// <summary>消融：丢掉只带基线宽度、不带排序修饰的组合成员，少跑一次真实搜索。</summary>
@@ -622,6 +633,7 @@ internal sealed record HarnessOptions
         int ascension = 0, actIndex = 0, dop = 1, budget = 600_000, unorderedPileMask = 0, stateKeySalt = 0;
         int blindSamples = 0;
         int blindKnownTop = 0;
+        int blindPolicySamples = 3, blindRolloutActions = 12, blindRolloutTurns = 3, blindPolicyNodes = 128;
         ulong blindSeed = 1;
         int transpositionPruneOff = 0, memoryNoProgressLimit = 0;
         int? transpositionEntryLimit = null;
@@ -645,13 +657,13 @@ internal sealed record HarnessOptions
         bool usePortfolio = false, observePortfolio = false, noPlainBaseline = false;
         string? portfolioModelPath = null;
         string potionPolicy = "Smart", milestone = "M2", language = "eng";
-        string blindAggregation = "Majority";
+        string blindAggregation = "MeanScore";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
         string? output = null, requestPath = null;
         string? runSavePath = null, combatReplayPath = null, historyRunPath = null;
         bool playCombat = false;
         int historyCombats = 1, combatDecisions = 200, combatTurns = 20, combatTimeout = 120;
-        string nativeChoicePolicy = "Stop";
+        string nativeChoicePolicy = "Blind";
         string workspace = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "../../../../../.local/offline-harness"));
         bool verbose = false;
@@ -696,6 +708,10 @@ internal sealed record HarnessOptions
                 case "--blind-samples": blindSamples = int.Parse(Value()); break;
                 case "--blind-seed": blindSeed = ulong.Parse(Value()); break;
                 case "--blind-aggregation": blindAggregation = Value(); break;
+                case "--blind-policy-samples": blindPolicySamples = int.Parse(Value()); break;
+                case "--blind-rollout-actions": blindRolloutActions = int.Parse(Value()); break;
+                case "--blind-rollout-turns": blindRolloutTurns = int.Parse(Value()); break;
+                case "--blind-policy-nodes": blindPolicyNodes = int.Parse(Value()); break;
                 case "--blind-known-top": blindKnownTop = int.Parse(Value()); break;
                 case "--use-portfolio": usePortfolio = true; break;
                 case "--no-plain-baseline": noPlainBaseline = true; break;
@@ -748,7 +764,7 @@ internal sealed record HarnessOptions
             throw new ArgumentException("--request、--run-save、--combat-replay、--history-run 只能选一个。");
         if (playCombat && (blindSamples == 0 || blindKnownTop != 0 || milestone == "M1"))
             throw new ArgumentException("--play-combat 需要 blind 模式、未知堆顶（0）及 M2；不接受固定堆顶知识跨动作传播。");
-        if (nativeChoicePolicy is not ("Stop" or "FirstLegal") || historyCombats is < 1 or > 4
+        if (nativeChoicePolicy is not ("Blind" or "Stop" or "FirstLegal") || historyCombats is < 1 or > 4
             || combatDecisions is < 1 or > 1000 || combatTurns is < 1 or > 100 || combatTimeout is < 1 or > 120)
             throw new ArgumentException("无效的原生 rollout 选择政策或停止预算。");
         if (profile is not ("Low" or "Medium" or "High" or "VeryHigh" or "Custom"))
@@ -761,6 +777,9 @@ internal sealed record HarnessOptions
             throw new ArgumentException("--blind-samples 需要 --search-mode Coordinator。");
         if (blindAggregation is not ("Majority" or "MeanScore" or "RiskAverse"))
             throw new ArgumentException("--blind-aggregation 只接受 Majority|MeanScore|RiskAverse。");
+        if (blindPolicySamples is < 1 or > 16 || blindRolloutActions is < 1 or > 64
+            || blindRolloutTurns is < 1 or > 8 || blindPolicyNodes is < 1 or > 4096)
+            throw new ArgumentException("Blind rollout bounds are out of range.");
         if (blindKnownTop < 0 || blindKnownTop > 0 && blindSamples == 0)
             throw new ArgumentException("--blind-known-top 必须非负并在 blind 模式下使用。");
         if (blindSamples > 0 && (productionBudget || observePortfolio || portfolioModelPath != null))
@@ -852,6 +871,10 @@ internal sealed record HarnessOptions
             BlindSeed = blindSeed,
             BlindAggregation = blindAggregation,
             BlindKnownTopDrawCards = blindKnownTop,
+            BlindPolicySamples = blindPolicySamples,
+            BlindRolloutActions = blindRolloutActions,
+            BlindRolloutTurns = blindRolloutTurns,
+            BlindPolicyNodes = blindPolicyNodes,
             UsePortfolio = usePortfolio,
             NoPlainBaselineMember = noPlainBaseline,
             UnorderedPileMask = unorderedPileMask,

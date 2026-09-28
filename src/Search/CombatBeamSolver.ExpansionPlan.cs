@@ -99,7 +99,7 @@ internal sealed partial class CombatBeamSolver
             }
             foreach ((int targetIndex, Creature? target) in TargetsFor(card, simulator))
             {
-                if (node.ActionCount == 0 && !card.Original.CanPlayTargeting(target))
+                if (node.ActionCount == 0 && !root.IsPredictionObservation && !card.Original.CanPlayTargeting(target))
                     continue;
                 string cardTitle;
                 string targetName;

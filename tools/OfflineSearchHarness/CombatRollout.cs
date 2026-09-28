@@ -91,6 +91,8 @@ internal static class CombatRollout
                 CombatManager.Instance.History.Changed += CountHistory;
                 try
                 {
+                    using IDisposable choiceContext = BlindNativeChoices.Bind(selector, combat, command,
+                        decisionOptions, loop, deadline.Token);
                     RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(native);
                     loop.RunUntilCompleted(native.CompletionTask, Remaining(watch, timeout), "native command completion");
                     if (native.Exception != null) throw native.Exception;
@@ -168,6 +170,9 @@ internal sealed class ObservedCardSelector(string policy) : ICardSelector
     internal List<object> Choices { get; } = [];
     internal Func<IReadOnlyList<CardCreationResult>, CardRewardSelection>? RewardSelector { get; set; }
     internal Func<CardModel[], int, int, CardModel[]>? NonCombatSelector { get; set; }
+    internal Func<CardModel[], int, int, CardModel[]>? CombatSelector { get; set; }
+    internal object? LastBlindEvidence { get; set; }
+    internal bool UsesBlindPolicy => policy == "Blind";
 
     public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
     {
@@ -177,6 +182,8 @@ internal sealed class ObservedCardSelector(string policy) : ICardSelector
             selected = NonCombatSelector(candidates, minSelect, maxSelect);
         else if (candidates.Length == minSelect)
             selected = candidates;
+        else if (policy == "Blind" && CombatSelector != null)
+            selected = CombatSelector(candidates, minSelect, maxSelect);
         else if (policy == "FirstLegal")
             selected = candidates.Take(minSelect).ToArray();
         else
@@ -186,7 +193,8 @@ internal sealed class ObservedCardSelector(string policy) : ICardSelector
             throw new InvalidDataException("Observed card selection violates native bounds or identity.");
         Choices.Add(new { policy = CombatManager.Instance.IsInProgress ? policy : "history", minSelect, maxSelect,
             options = candidates.Select(CardChoiceSupport.ChoiceCardKey).ToArray(),
-            selected = selected.Select(CardChoiceSupport.ChoiceCardKey).ToArray() });
+            selected = selected.Select(CardChoiceSupport.ChoiceCardKey).ToArray(), valuation = LastBlindEvidence });
+        LastBlindEvidence = null;
         return Task.FromResult<IEnumerable<CardModel>>(selected);
     }
 

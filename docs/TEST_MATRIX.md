@@ -1,6 +1,24 @@
 # CombatSolver 测试清单
 
-## 未知 RNG blind 搜索（2026-09-28）
+## 随机池与逐步观察策略（2026-09-28）
+
+配置与评分范围见[专项实现记录](strategy/blind-pool-policy-20260928.md)。共同配置为 M1、blind seed 902828、3 外层/3 内层样本、Beam 12、300 节点/3000 ms、内层 128 节点、12 命令/跨 3 回合、DOP1、Smart；证据根为仓库 `.local/blind-policy-20260928/`。
+
+| 场景 | 结果 | 证据目录 |
+|---|---|---|
+| `blind-pool-attack.json` | Passed 13 项：两个独立决策器的命令/选项值不随外层未来改变、三张和跳过均复评、原生选择 `PILLAGE` 并完整 continuation/RNG 对账 | `attack-final` |
+| `blind-pool-skill.json` | Passed 14 项：0 能量注入、全部候选/跳过复评、原生选择 `IMPERVIOUS` 并完整 continuation/RNG 对账 | `skill-final` |
+| `blind-pool-acid.json` | Passed 9 项：0 能量注入、随机池首命令参与完整矩阵；2/3 完成胜利，另一条 time_limit 只报告观察前缀 | `acid-final` |
+| `blind-pool-stoke.json` | Passed 9 项：`BLUDGEON` 3/3 零损击杀；先添柴消耗它或直接 EndTurn 均掉 4 HP | `stoke-final` |
+| `blind-pool-gambler.json` | Passed 10 项：复评弃 0/1/2 张，原生选两张 `WOUND`；完整 continuation/RNG 一致 | `gambler-final` |
+| `blind-delayed-energy.json` / `delayed` | Passed 17 项：仍选择铺垫，下回合原生 5 能量及完整两回合对账 | `delayed-final` |
+| `blind-delayed-energy-lethal.json` / `immediate` | Passed 22 项：仍选择当前打击击杀，避免铺垫多损 4 HP | `immediate-final` |
+| 不给 blind 参数的 Coordinator 最小回归 | Passed：完整胜利、战损 0、2 展开/4 转移；只作常规回放入口烟测 | `deterministic-final` |
+| Release 构建与 Windows 结构门禁 | Passed：Mod/最终宿主 0 警告/0 错误；`REFACTOR_BOUNDARIES_OK search_files=241`；两端门禁同步维护，仅执行 Windows | 本轮命令输出 |
+
+以上合计 94 项。每个候选执行约束首命令并在所有样本上评价；源原生根保持不变。原生选择取消收尾属于源码修复，本轮未另执行超时故障注入。内层确定化只提名命令/选择，仍可能有偏差；全局可见字段白名单、统计胜率、复杂原生嵌套选择、Linux 和可见游戏未验证。旧阶段数据保留如下，不能当作新算法的重复通过证据。
+
+## 未知 RNG blind 搜索（初版历史，2026-09-28）
 
 | 场景 | 配置 | 结果 | 证据 |
 |---|---|---|---|

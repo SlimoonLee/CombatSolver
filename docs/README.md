@@ -47,6 +47,7 @@
 | 不启动 Godot 批量跑搜索、量宽度与预算 | [离线搜索宿主](OFFLINE_SEARCH_HARNESS.md) |
 | 未知 RNG 原生命令执行、用户存档与历史指导的 9 场实测 | [无头原生战斗实测](strategy/blind-native-rollout-20260928.md) |
 | 同步 0.47.2 后的随机药水、添柴、跨回合正反例与信息边界缺口 | [未知 RNG 专项核查](strategy/blind-rng-audit-20260928.md) |
+| 随机池首动作补齐、观察后选牌、外层轨迹避免全知未来及 94 项检查 | [随机池与逐步观察策略](strategy/blind-pool-policy-20260928.md) |
 | 完整性能优化正式 PR、路线控件复用、0.38.6 合并验证与对照 | [正式 PR 验收](performance/performance-pr-20260915.md) |
 | 自身弃牌续执行正式接入、搜索等价与整场对照 | [正式续执行与整搜](performance/choice-continuation-search-20260914.md) |
 | 卡牌、药水、遗物与Power选牌续执行的批量扩展可行性 | [选牌续执行扩展研究](performance/choice-continuation-expansion-20260914.md) |
