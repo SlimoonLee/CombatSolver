@@ -93,7 +93,7 @@ internal static class BlindAuditChecks
                 var handIds = root.ForkSimulator().State.GetPlayerCombatState(root.PlayerIdentity).Hand.Cards
                     .Select(card => card.Preview.Id.Entry).ToHashSet(StringComparer.Ordinal);
                 string[] auditedCards =
-                    ["DUALCAST", "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
+                    ["DUALCAST", "MULTI_CAST", "QUADCAST", "STOKE", "INFERNAL_BLADE", "DISTRACTION", "WHITE_NOISE",
                      "TRUE_GRIT", "THRASH", "CINDER", "ANOINTED", "HIDDEN_GEM", "DRAIN_POWER",
                      "ALCHEMIZE", "CHAOS", "BALL_LIGHTNING", "PREPARED",
                      "JACKPOT", "MANIFEST_AUTHORITY"];
@@ -107,7 +107,7 @@ internal static class BlindAuditChecks
                 command = new(PlanActionKind.UsePotion, root.StartTurnNumber,
                     PotionId: potion.Id.Entry, PotionSlot: player.GetPotionSlotIndex(potion));
             }
-            Check(command.CardId is "DUALCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
+            Check(command.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST" or "STOKE" or "INFERNAL_BLADE" or "DISTRACTION" or "WHITE_NOISE"
                 or "TRUE_GRIT" or "THRASH" or "CINDER" or "ANOINTED" or "HIDDEN_GEM" or "DRAIN_POWER"
                 or "ALCHEMIZE" or "CHAOS" or "BALL_LIGHTNING" or "PREPARED"
                 or "JACKPOT" or "MANIFEST_AUTHORITY"
@@ -144,7 +144,7 @@ internal static class BlindAuditChecks
             PlanAction[] Prefix(CombatRootSnapshot source, PlanAction first)
             {
                 if (channelsThenTurnEnd) return [first, endTurnCommand];
-                if (first.Kind == PlanActionKind.PlayCard && first.CardId == "DUALCAST")
+                if (first.Kind == PlanActionKind.PlayCard && first.CardId is "DUALCAST" or "MULTI_CAST" or "QUADCAST")
                 {
                     var ball = source.ForkSimulator().State.GetPlayerCombatState(player).Hand.Cards
                         .Single(c => c.Preview.Id.Entry == "BALL_LIGHTNING");
