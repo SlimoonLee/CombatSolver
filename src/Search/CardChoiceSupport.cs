@@ -761,6 +761,21 @@ internal static partial class CardChoiceSupport
             ContextId: spec.ContextId);
     }
 
+    /// <summary>
+    /// Builds the single-card choice that selects <paramref name="optionIndex"/> of the recorded
+    /// candidates in their presented order. Blind per-option evaluation forces each candidate this
+    /// way; the caller supplies source identity separately.
+    /// </summary>
+    public static PlanCardChoice BuildRequestedChoiceAt(CardChoiceSpec spec, int optionIndex)
+    {
+        PredictedCard option = spec.Options[optionIndex];
+        return new PlanCardChoice(
+            spec.Effect,
+            spec.SourcePile,
+            ToTokens(new[] { option }, spec.Options, spec.SourceCards, static card => card.Id.Entry),
+            ContextId: spec.ContextId);
+    }
+
     public static IReadOnlyList<PredictedCard> ResolveStandaloneChoice(
         CombatPredictionSimulator simulator,
         PlanCardChoice choice,

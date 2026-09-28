@@ -130,6 +130,7 @@ internal sealed record BlindSearchEvaluation(
     public string StopReason { get; init; } = "search_boundary";
     public IReadOnlyList<PlanAction> ObservedActions { get; init; } = [];
     public IReadOnlyList<BlindPotionChoiceResult> PotionChoices { get; init; } = [];
+    public IReadOnlyList<BlindCardChoiceResult> CardChoices { get; init; } = [];
 }
 
 internal sealed record BlindSearchActionSummary(

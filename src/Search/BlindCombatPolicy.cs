@@ -13,6 +13,9 @@ internal sealed record BlindPotionOptionValue(PlanCardChoice Choice, double Mean
 internal sealed record BlindPotionChoiceResult(string SourceId, PlanCardChoice Selected,
     IReadOnlyList<BlindPotionOptionValue> Options);
 
+internal sealed record BlindCardChoiceResult(string SourceId, PlanCardChoice Selected,
+    IReadOnlyList<BlindPotionOptionValue> Options);
+
 /// <summary>
 /// A bounded executable continuation policy. Its decision samples never inherit the trajectory's
 /// hidden RNG or draw order. Determinized plans propose commands; only observed commands are executed.
@@ -158,6 +161,7 @@ internal sealed class BlindContinuationPolicy(
         int initialLoss = state.CumulativePlayerHpLost;
         List<PlanAction> actions = [];
         List<BlindPotionChoiceResult> potionChoices = [];
+        List<BlindCardChoiceResult> cardChoices = [];
         string stop = "action_limit";
         try
         {
@@ -187,7 +191,7 @@ internal sealed class BlindContinuationPolicy(
                     }
                 }
                 else
-                    next = driver.ReplayBlindCommand(state, command, request => ObserveChoice(request));
+                    next = ReplayCardChoiceAware(driver, trajectory, state, command, cardChoices);
                 state.ReleaseSimulator();
                 state = next;
                 actions.Add(command);
@@ -210,9 +214,90 @@ internal sealed class BlindContinuationPolicy(
                 StopReason = stop,
                 ObservedActions = actions.ToArray(),
                 PotionChoices = potionChoices.ToArray(),
+                CardChoices = cardChoices.ToArray(),
             };
         }
         finally { state.ReleaseSimulator(); }
+    }
+
+    /// <summary>
+    /// Replays one command; when its execution surfaces a card choice with multiple recorded
+    /// candidates (Discovery family, Seeker Strike), the same command is re-replayed from the same
+    /// pre-command state once per candidate — deterministic apart from the choice — and each
+    /// continuation is scored with independent inner searches. The best candidate's post-state
+    /// continues the trajectory; per-option scores are recorded as
+    /// independent_determinized_choice_proposal, same as potion options.
+    /// </summary>
+    private SimulationSnapshot ReplayCardChoiceAware(CombatBeamSolver driver, CombatRootSnapshot trajectory,
+        SimulationSnapshot state, PlanAction command, List<BlindCardChoiceResult> cardChoices)
+    {
+        TurnStartChoiceRequest? observed = null;
+        SimulationSnapshot firstPass = driver.ReplayBlindCommand(state, command, request =>
+        {
+            observed = request;
+            return ObserveChoice(request);
+        });
+        CardChoiceSpec? spec = observed?.Spec;
+        if (spec == null || spec.Options.Count <= 1)
+            return firstPass;
+
+        CombatRootSnapshot preCommandRoot = trajectory.ObservePrediction(state.Simulator);
+        var evaluated = new List<(PlanCardChoice Choice, double Score, int Victories)>();
+        int bestIndex = 0;
+        double bestScore = double.NegativeInfinity;
+        for (int index = 0; index < spec.Options.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PlanCardChoice forced = CardChoiceSupport.BuildRequestedChoiceAt(spec, index);
+            double score = 0;
+            int victories = 0;
+            foreach (ulong seed in _decisionSeeds)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CombatRootSnapshot sample = preCommandRoot.ForkForSample(seed);
+                CombatBeamSolver seedDriver = new(sample, names, damage, DecisionPolicy, cancellationToken,
+                    searchProfile: DecisionPolicy.Profile);
+                SimulationSnapshot before = seedDriver.ObserveBlindState();
+                SimulationSnapshot? after = null;
+                try
+                {
+                    after = seedDriver.ReplayBlindCommand(before, command,
+                        request => request.Spec == null
+                            ? ObserveChoice(request)
+                            : CardChoiceSupport.BuildRequestedChoiceAt(request.Spec, index));
+                    CombatRootSnapshot continuation = sample.ObservePrediction(after.Simulator);
+                    SolverResult result = SolveDecision(continuation, DecisionPolicy);
+                    recordWork(result);
+                    recordTransitions?.Invoke(1);
+                    score += result.BestNode.Score;
+                    if (result.Snapshot.AllEnemiesDead && !result.Snapshot.PlayerDead
+                        && result.BoundaryReason == SearchBoundaryReason.None && !result.Snapshot.HasRisk)
+                        victories++;
+                }
+                finally
+                {
+                    before.ReleaseSimulator();
+                    after?.ReleaseSimulator();
+                }
+            }
+            double mean = score / _decisionSeeds.Length;
+            evaluated.Add((forced, mean, victories));
+            if (mean > bestScore)
+            {
+                bestScore = mean;
+                bestIndex = index;
+            }
+        }
+
+        SimulationSnapshot chosen = driver.ReplayBlindCommand(state, command,
+            request => request.Spec == null
+                ? ObserveChoice(request)
+                : CardChoiceSupport.BuildRequestedChoiceAt(request.Spec, bestIndex));
+        cardChoices.Add(new BlindCardChoiceResult(command.CardId ?? command.PotionId ?? "choice",
+            evaluated[bestIndex].Choice,
+            evaluated.Select(item => new BlindPotionOptionValue(item.Choice, item.Score,
+                item.Victories / (double)_decisionSeeds.Length, 0)).ToArray()));
+        return chosen;
     }
 
     private double EvaluateLeaf(CombatRootSnapshot observation)
