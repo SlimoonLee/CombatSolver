@@ -17,7 +17,7 @@
 |---|---|---|
 | 随机召唤 | 组装师 FABRICATE_MOVE（FABRICATOR_NORMAL） | Passed |
 | 随机偷牌 | 偷窃草蜢 THIEVERY_MOVE（THIEVING_HOPPER_WEAK） | Passed |
-| 随机分支 | 雾菇 SWIPE_MOVE→BRANCH（FOGMOG_NORMAL） | 夹具入库,待无头基础设施重跑 |
+| 随机分支 | 雾菇 SWIPE_MOVE→BRANCH（FOGMOG_NORMAL） | Passed |
 | 随机塞牌/随机生命 | — | 经组装师召唤链/孵化链后续批 |
 
 ## 回合开始时序族验收（2026-09-29 晚）

@@ -34,7 +34,7 @@
 | 随机偷牌 | ThievingHopper `THIEVERY_MOVE`(THIEVING_HOPPER_WEAK) | `monster-moves-random-thief.json` | **Passed**(随机偷牌与攻击、手牌/牌堆/历史/RNG 差分一致) |
 | 随机塞牌 | Noisebot `NOISE_MOVE` | — | **经召唤链覆盖**:噪音机器人仅作为组装师召唤物出现(无独立遭遇);其塞牌招随召唤链后续批验收 |
 | 随机生命 | ToughEgg | — | 后续(需召唤链构造孵化场景) |
-| 随机分支 | Fogmog `SWIPE_MOVE`(FOGMOG_NORMAL,执行链 FollowUp→BRANCH 随机) | `monster-moves-random-branch.json` | **待重跑**:无头基础设施瞬态("not the instance's private game"),非语义失败;夹具已入库 |
+| 随机分支 | Fogmog `SWIPE_MOVE`(FOGMOG_NORMAL,执行链 FollowUp→BRANCH 随机) | `monster-moves-random-branch.json` | **Passed**(重试即恢复,先前为无头基础设施瞬态) |
 
 夹具位于 `tools/OfflineSearchHarness/fixtures/monster-moves-random-*.json`;运行:
 
