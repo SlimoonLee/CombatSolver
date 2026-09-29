@@ -1,0 +1,7 @@
+[
+  {
+    "monsterId": "KnowledgeDemon",
+    "moveId": "CURSE_OF_KNOWLEDGE_MOVE",
+    "expectedPlayerHpLoss": 0
+  }
+]

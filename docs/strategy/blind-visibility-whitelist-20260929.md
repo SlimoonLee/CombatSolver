@@ -35,3 +35,11 @@
 ## 后续(独立小任务,待排期)
 
 `_curseOfKnowledgeCounter`/`_extraMultiClawCount`/`_respawns`/`_turnsUntilSummonable`/`_callForBackupCount` 五个计数改为公开历史重建;验收 = 同起点重建值与直读值差分 + 历史扫描性能。
+
+## 严格化实现与验证状态(2026-09-29 晚更新)
+
+进一步调查收敛了范围:五个计数中,`_extraMultiClawCount`/`_respawns`/`_turnsUntilSummonable`/`_callForBackupCount` 的全部读取点都在**模拟演进内**(模拟按自身公开事件维护,非根捕获直读),不在整改范围;真正在根捕获/意图预测时直读 live 私有字段的只有**知识恶魔诅咒计数**(BranchMonsterAi.Capture 与 IntentForecaster 两处)。
+
+已实现:两处直读改为 StateLog 重建——原版计数器只在 `CurseOfKnowledgeMove`(公开招式,live 战斗)内递增、初值 0,故 `StateLog` 中该招的出现次数恒等于私有字段值;StateLog 本就在快照中。
+
+验证状态:等价性由"递增点与 StateLog 同源(同一状态机记录)"论证;**CURSE 招强制差分未能运行**——知识恶魔 Boss 遭遇在无头环境建局卡死(启动器 300 秒超时,与本次改动无关,日志 `.local/kd-curse.log`),夹具 `monster-moves-kd-curse.json` 已入库待无头环境可行时补跑。模拟侧自身的计数维护(MonsterMoveEffects 的 Set/Get)不受影响。
