@@ -1,0 +1,12 @@
+{
+  "scenarioId": "BLIND-KD-CURSE-COUNTER",
+  "characterId": "IRONCLAD",
+  "encounterId": "KNOWLEDGE_DEMON_BOSS",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 379,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 5 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 5 }
+  ]
+}

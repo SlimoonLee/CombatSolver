@@ -351,6 +351,40 @@ internal static class BlindAuditChecks
                 finally { expected.ReleaseSimulator(); }
             }
         }
+        else if (mode == "ai-counter")
+        {
+            // Knowledge Demon curse counter reconstruction differential: EndTurn lets the demon
+            // play its curse move (vanilla counter 0→1), then the StateLog-reconstructed count
+            // must equal the vanilla private field without ever reading it in production paths.
+            PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber);
+            // ChooseCurse opens a real choose-a-card screen for the player; headless needs a selector.
+            var curseSelector = new FirstVisibleCardSelector();
+            using var curseScope = CardSelectCmd.PushSelector(curseSelector);
+            SimulationSnapshot twoTurns = Replay(root, endTurn);
+            try
+            {
+                var twoTurnsSim = (CombatPredictionSimulator)twoTurns.Simulator;
+                var simDemon = ((SimulatedCombatState)twoTurnsSim.State.CombatState).Enemies
+                    .Select(creature => creature.Monster).Single(model => model != null && model.Id.Entry == "KNOWLEDGE_DEMON");
+                int simAdvanced = simDemon!.MoveStateMachine.StateLog
+                    .Count(state => state.Id == "CURSE_OF_KNOWLEDGE_MOVE");
+                Check(simAdvanced == 1, "simulation advances the demon state machine exactly once");
+                ExecuteNative(live, endTurn, loop, settleSeconds: 60);
+                var liveDemon = live.Enemies
+                    .Select(creature => creature.Monster).Single(model => model != null && model.Id.Entry == "KNOWLEDGE_DEMON");
+                int reconstructed = liveDemon!.MoveStateMachine.StateLog
+                    .Count(state => state.Id == "CURSE_OF_KNOWLEDGE_MOVE");
+                int direct = MonsterValueReader.ReadInt(liveDemon, "_curseOfKnowledgeCounter");
+                Check(reconstructed == 1, "curse move appears in the executed-move log exactly once");
+                Check(reconstructed == direct,
+                    "StateLog-reconstructed counter equals the vanilla private field");
+                // Full two-turn Stamp reconciliation is intentionally omitted: the demon's curse
+                // application flows through the dedicated KD pending-choice channel, so verifying
+                // the chosen curse card needs planned-choice plumbing (complex nested choices).
+                evidence.Add(new { stage = "ai_counter_reconstruction", reconstructed, direct });
+            }
+            finally { twoTurns.ReleaseSimulator(); }
+        }
         else if (mode == "initial-relic")
         {
             // Turn-1 generation relics trigger before the blind root capture (player turn 1 Play);
@@ -416,7 +450,7 @@ internal static class BlindAuditChecks
         return $"mode={mode} checks={checks} Passed";
     }
 
-    private static void ExecuteNative(CombatState state, PlanAction command, MainLoopContext loop)
+    private static void ExecuteNative(CombatState state, PlanAction command, MainLoopContext loop, int settleSeconds = 12)
     {
         var player = LocalContext.GetMe(state)!;
         GameAction action = CombatRollout.CreateAction(state, player, command);
@@ -429,7 +463,7 @@ internal static class BlindAuditChecks
             while (player.PlayerCombatState!.Phase != PlayerTurnPhase.Play
                 || player.PlayerCombatState.TurnNumber == command.Turn)
             {
-                if (watch.Elapsed.TotalSeconds > 12) throw new TimeoutException("Audit next turn did not settle.");
+                if (watch.Elapsed.TotalSeconds > settleSeconds) throw new TimeoutException("Audit next turn did not settle.");
                 loop.Pump(TimeSpan.FromMilliseconds(5));
             }
         }
@@ -443,8 +477,9 @@ internal static class BlindAuditChecks
         {
             CardModel[] cards = options.ToArray();
             // Potion reconciliations present exactly three cards; discard triggers (e.g. Prepared
-            // under Tingsha) present an arbitrary hand with min=max=1. Both pick the first card.
-            if (maxSelect != 1 || minSelect > 1 || (cards.Length != 3 && minSelect != 1))
+            // under Tingsha) present an arbitrary hand with min=max=1, and skip-able screens
+            // (Knowledge Demon curse) present min=0/max=1. All pick the first card.
+            if (maxSelect != 1 || minSelect > 1)
                 throw new NotSupportedException("Audit expects a single-pick visible choice.");
             Options = cards.Select(CardChoiceSupport.ChoiceCardKey).ToArray();
             Selected = [CardChoiceSupport.ChoiceCardKey(cards[0])];
