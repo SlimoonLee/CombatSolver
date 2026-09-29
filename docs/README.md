@@ -55,6 +55,7 @@
 | 到手牌家族收尾：大奖/君权自授与激发球卡二连 | [收尾来源验收](strategy/blind-rng-final-sources-20260929.md) |
 | 未知 RNG 全天扩展总交接（含审核要点）：两处行为改动、约 58 来源验收、剩余清单 | [未知 RNG 扩展交接 20260929](strategy/blind-rng-expansion-handoff-20260929.md) |
 | 回合开始时序族验收：大帽子/橙色团块/工具箱 | [回合开始时序族验收](strategy/blind-rng-turnstart-20260929.md) |
+| 多 seed 质量统计首报：逐选项评分 A/B（平均战损 −60%） | [多 seed 质量统计](strategy/blind-qstats-20260929.md) |
 | 怪物私有字段可见性白名单审计（无隐藏未来进入决策；五个计数严格化待排期） | [可见字段白名单审计](strategy/blind-visibility-whitelist-20260929.md) |
 | 随机怪物来源清单与分组代表（召唤/偷牌差分 Passed，分支待重跑） | [随机怪物来源清单](strategy/blind-rng-monsters-20260929.md) |
 | 接手扩展随机牌/药水/机制：代码职责、逐批流程、验收模板、已踩坑与架构缺口 | [未知 RNG 扩展交接](strategy/blind-rng-expansion-handoff-20260928.md) |

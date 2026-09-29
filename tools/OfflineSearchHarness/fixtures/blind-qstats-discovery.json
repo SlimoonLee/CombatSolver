@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-QSTATS-DISCOVERY",
+  "characterId": "IRONCLAD",
+  "encounterId": "CULTISTS_NORMAL",
+  "seed": "blind-qstats-discovery",
+  "initialEnemyCurrentHps": [60, 60],
+  "initialPlayerEnergy": 3,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "DISCOVERY", "pile": "Hand" },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_IRONCLAD", "pile": "Draw", "count": 5 },
+    { "cardId": "DEFEND_IRONCLAD", "pile": "Draw", "count": 5 }
+  ]
+}

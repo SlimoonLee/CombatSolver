@@ -2,6 +2,7 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 2026-09-29 晚架构第 6 步首报（多 seed 质量统计）：用 OFFLINE_HARNESS_COMBATSOLVER_DLL 做逐选项评分前/后 DLL A/B——候选影响战局场景（双敌 60/60 长战斗、3 blind seed）平均战损 4.22→1.67、尾部 9.00→3.67，且 CardChoices 记录 12–13 次三候选评估；确定斩杀占优短战斗两者无差异（不劣化）。方法、口径与后续扩充见[多 seed 质量统计](strategy/blind-qstats-20260929.md)。知识恶魔 CURSE 差分 600 秒仍卡死（无头 Boss 建局问题，非超时可解），登记待可见模式或换建局途径。
 - 2026-09-29 晚架构第 2 步（通用逐选项 blind 评分）交付：盲轨迹执行中，凡产生卡牌选择（发现族/探寻打击及一切经 OwnChoice 的卡牌选择来源）的命令，从同一前命令状态按候选逐一强制重放（确定性,仅选择不同），每候选续段用独立内层搜索评分，择优继续轨迹；逐选项分数以 `CardChoices`（ValueScope=独立确定化_choice_proposal）入评估输出。新增 `CardChoiceSupport.BuildRequestedChoiceAt`。发现族五场景 66 项、发现/攻击药水审计 61 项、攻击 policy 13 项全过；发现场景证据：3 候选独立评估、不同外层样本择优不同牌。行为源码改动：BlindCombatPolicy/BlindCombatSearch/CardChoiceSupport；已部署。
 - 2026-09-29 晚架构第 1 步（可见字段白名单）审计交付后同晚完成严格化：调查确认五计数中仅知识恶魔诅咒计数在根捕获/意图预测时直读 live 私有字段（其余四计数读取点都在模拟演进内）；原版计数器仅在 CURSE_OF_KNOWLEDGE_MOVE（公开招式）内递增、初值 0，故 `BranchMonsterAi.Capture` 与 `IntentForecaster` 两处直读改为 StateLog 中该招出现次数（重建恒等于字段值）。CURSE 招强制差分因无头 Boss 建局卡死（启动器 300 秒超时，与改动无关）待补跑，夹具已入库。已部署。见[可见字段白名单审计](strategy/blind-visibility-whitelist-20260929.md)严格化章节。
 - 2026-09-29 晚随机怪物分组代表：来源清单与分组（21 个随机分支怪物按意图构成五组 + 6 个效果随机怪物）入档；组代表经 MonsterMoveChecks 严格差分——随机召唤（组装师 FABRICATE_MOVE，FABRICATOR_NORMAL 遭遇召唤槽）与随机偷牌（偷窃草蜢 THIEVERY_MOVE）Passed，分支代表（雾菇 SWIPE_MOVE→BRANCH 链）夹具入库待无头基础设施重跑（瞬态）。教训：分支态不能直接强制（需经 FollowUp 链）、召唤怪需其专属遭遇槽位。清单与后续见[随机怪物来源清单](strategy/blind-rng-monsters-20260929.md)。
