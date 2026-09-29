@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
@@ -15,6 +16,7 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
     private readonly CheckButton _ignoreLongTermRewards;
     private readonly CheckButton _limitBrightestFlame;
     private readonly SpinBox _brightestFlameLimit;
+    private readonly Label _runEndNote;
     private bool _refreshing;
     private bool _disabled;
 
@@ -59,6 +61,13 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
             + SolverText.Get("也不再靠它们在搜索里保留路线。白拿的收益照样拿——最终选择里它仍然排在战损之后当平局的分先手。")
             + SolverText.Get("后期没有商店、不需要这些收益时打开它；收益额度暂停生效，最大生命消耗限制仍然有效。");
         ignoreRow.AddChild(_ignoreLongTermRewards);
+        // 终局战自动无视开着、当前又正是终局 Boss 战时，额度哪怕填了也不参与本场打分。
+        // 这行小字把「本场为什么灰了」讲出来，手动开关保持玩家设置原样不动。
+        _runEndNote = SolverUiTokens.CreateLabel(
+            SolverText.Get("终局战：本场已自动无视局外收益"), SolverUiTokens.Type.Caption, SolverUiTokens.Palette.Warning);
+        _runEndNote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _runEndNote.Name = "RunEndAutoIgnoreNote";
+        _runEndNote.Visible = false;
         VBoxContainer flameRows = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         CardModel flame = ModelDb.Card<BrightestFlame>();
         HBoxContainer flameToggleRow = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -90,6 +99,7 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
         rows.AddThemeConstantOverride("separation", SolverUiTokens.Spacing.Sm);
         flameRows.AddThemeConstantOverride("separation", 8);
         rows.AddChild(ignoreRow);
+        rows.AddChild(_runEndNote);
         rows.AddChild(flameRows);
         rows.AddChild(new HSeparator());
         rows.AddChild(allowanceLabel);
@@ -203,6 +213,18 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
         return input;
     }
 
+    /// <summary>
+    /// 终局战自动无视正作用在当前这场战斗上：开关本身开着、玩家又没手动开总开关、
+    /// 且当前战斗正是终局 Boss 战。此刻额度只对之后的战斗有意义，本场按灰掉处理。
+    /// </summary>
+    internal static bool IsRunEndAutoIgnoreActive(SolverSettingsData settings)
+        => !settings.IgnoreLongTermRewards
+            && settings.IgnoreLongTermRewardsAtRunEnd
+            && CombatManager.Instance is { } combatManager
+            && combatManager.IsInProgress
+            && combatManager.DebugOnlyGetState() is { } liveState
+            && ActEndingBossPolicy.IsRunEndingFight(liveState);
+
     public void Refresh(bool disabled)
     {
         _refreshing = true;
@@ -218,7 +240,10 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
             if (!_brightestFlameLimit.GetLineEdit().HasFocus())
                 _brightestFlameLimit.SetValueNoSignal(settings.BrightestFlameMaxHpLossLimit ?? 2);
             // 总开关打开时下面每一项都不生效，所以灰掉：不是为了拦住输入，是让「填了没用」看得见。
-            bool budgetsUsable = !disabled && !settings.IgnoreLongTermRewards;
+            // 终局战自动无视同理——额度留给之后的战斗，本场不再参与打分。
+            bool autoIgnored = !disabled && IsRunEndAutoIgnoreActive(settings);
+            _runEndNote.Visible = autoIgnored;
+            bool budgetsUsable = !disabled && !settings.IgnoreLongTermRewards && !autoIgnored;
             foreach ((GrowthSource source, SpinBox input) in _budgets)
             {
                 input.Editable = budgetsUsable;
@@ -278,10 +303,12 @@ internal sealed partial class SolverGrowthStrategyPanel : PanelContainer
     internal bool SettingsConfiguredForTesting
         => _budgets.All(pair => (int)pair.Value.Value == SolverSettings.Current.GrowthBudgets.Get(pair.Key))
             && _extraBudgets.All(row => (int)row.Input.Value == SolverSettings.Current.GrowthBudgets.Get(row.Source)
-                && row.Input.Editable == (!SolverSettings.Current.IgnoreLongTermRewards && !_disabled))
+                && row.Input.Editable == (!SolverSettings.Current.IgnoreLongTermRewards
+                    && !_disabled && !IsRunEndAutoIgnoreActive(SolverSettings.Current)))
             && _ignoreLongTermRewards.ButtonPressed == SolverSettings.Current.IgnoreLongTermRewards
             && _budgets.Values.All(input =>
-                input.Editable == (!SolverSettings.Current.IgnoreLongTermRewards && !_disabled));
+                input.Editable == (!SolverSettings.Current.IgnoreLongTermRewards
+                    && !_disabled && !IsRunEndAutoIgnoreActive(SolverSettings.Current)));
 
     internal IReadOnlyList<(GrowthSourceHandle Source, SpinBox Input)> ThirdPartyRowsForTesting => _extraBudgets;
 

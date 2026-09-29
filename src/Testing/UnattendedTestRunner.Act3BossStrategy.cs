@@ -432,6 +432,37 @@ internal sealed partial class UnattendedTestRunner
                 throw new InvalidOperationException("Act 3 boss scope mismatch.");
         if (SearchPolicySnapshot.IsAct3BossEncounter(2, "FUZZY_WURM_CRAWLER_WEAK"))
             throw new InvalidOperationException("Ordinary encounters must keep their existing search.");
+        // 「终局战自动无视卡遗物、卡成长」：折算只由「设置开关 × 这场是否终局」决定，
+        // 且必须在捕获点生效——遗物计数目标是搜索、早停与终局排序的共同输入，下游没有第二处。
+        SolverSettingsData originalRunEndSettings = SolverSettings.Current;
+        SearchPolicySnapshot runEndAuto = SolverController.CaptureSearchPolicy(
+            SolverSettings.Capture(), combat, false, null);
+        SolverSettings.ApplyForTesting(originalRunEndSettings with { IgnoreLongTermRewardsAtRunEnd = false });
+        SearchPolicySnapshot runEndManual;
+        try
+        {
+            runEndManual = SolverController.CaptureSearchPolicy(
+                SolverSettings.Capture(), combat, false, null);
+        }
+        finally { SolverSettings.ApplyForTesting(originalRunEndSettings); }
+        if (ActEndingBossPolicy.IsRunEndingFight(combat))
+        {
+            if (!runEndAuto.IgnoreLongTermRewards || runEndAuto.RelicTargets.Count != 0)
+                throw new InvalidOperationException(
+                    "终局战必须自动按「不考虑局外收益」处理并清空遗物计数目标。");
+            if (runEndManual.IgnoreLongTermRewards != originalRunEndSettings.IgnoreLongTermRewards
+                || runEndManual.RelicTargets.Count
+                    != RelicCounterCatalog.Capture(combat, originalRunEndSettings.RelicStrategyEnabled,
+                        originalRunEndSettings.RelicCounterRules).Count)
+                throw new InvalidOperationException("关掉终局自动开关后必须还原手动语义与遗物计数目标。");
+        }
+        else
+        {
+            if (runEndAuto.IgnoreLongTermRewards && !originalRunEndSettings.IgnoreLongTermRewards)
+                throw new InvalidOperationException("非终局战不得自动打开「不考虑局外收益」。");
+            if (runEndAuto.RelicTargets.Count != runEndManual.RelicTargets.Count)
+                throw new InvalidOperationException("非终局战不得自动清空遗物计数目标。");
+        }
         foreach (var relic in player.Relics.ToArray()) await RelicCmd.Remove(relic);
         foreach (var power in combat.Creatures.SelectMany(c => c.Powers).ToArray()) await PowerCmd.Remove(power);
         await ClearPlayerPilesAsync(player);

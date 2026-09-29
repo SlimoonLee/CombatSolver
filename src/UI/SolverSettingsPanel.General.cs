@@ -12,6 +12,7 @@ internal sealed partial class SolverSettingsPanel
     private CheckButton _stopOnCombatEnd = null!;
     private CheckButton _stopOnDeathTurn = null!;
     private CheckButton _stopOnWorseRecalculation = null!;
+    private CheckButton _ignoreLongTermRewardsAtRunEnd = null!;
     private OptionButton _actTransitionBossHpStrategy = null!;
     private OptionButton _finalBossHpStrategy = null!;
     private LineEdit _acceptableBattleHpLoss = null!;
@@ -33,7 +34,8 @@ internal sealed partial class SolverSettingsPanel
         => _actTransitionBossHpStrategy.GetItemId(_actTransitionBossHpStrategy.Selected)
                == (int)SolverSettings.Current.ActTransitionBossHpStrategy
            && _finalBossHpStrategy.GetItemId(_finalBossHpStrategy.Selected)
-               == (int)SolverSettings.Current.FinalBossHpStrategy;
+               == (int)SolverSettings.Current.FinalBossHpStrategy
+           && _ignoreLongTermRewardsAtRunEnd.ButtonPressed == SolverSettings.Current.IgnoreLongTermRewardsAtRunEnd;
 
     internal bool PotionRewardPredictionConfiguredForTesting
         => _predictPotionReward.ButtonPressed == SolverSettings.Current.PredictPotionReward;
@@ -55,9 +57,11 @@ internal sealed partial class SolverSettingsPanel
             {
                 ActTransitionBossHpStrategy = BossHpStrategy.ProgressionFirst,
                 FinalBossHpStrategy = BossHpStrategy.MinimizeHpLoss,
+                IgnoreLongTermRewardsAtRunEnd = false,
             }));
             Reload();
-            return actTransitionIndependent && BossHpStrategySettingsConfiguredForTesting;
+            return actTransitionIndependent && BossHpStrategySettingsConfiguredForTesting
+                && !_ignoreLongTermRewardsAtRunEnd.ButtonPressed;
         }
         finally
         {
@@ -208,6 +212,15 @@ internal sealed partial class SolverSettingsPanel
             SolverText.Get("最终 Boss 血量取舍"),
             _finalBossHpStrategy,
             SolverText.Get("通关优先只要求路线存活并优先保留资源；最低战损会继续比较剩余血量。重新计算后生效。"));
+        _ignoreLongTermRewardsAtRunEnd = CreateToggle();
+        _ignoreLongTermRewardsAtRunEnd.Toggled += OnIgnoreLongTermRewardsAtRunEndToggled;
+        AddBasicRow(
+            bossStrategyGrid,
+            SolverText.Get("终局战自动无视卡遗物、卡成长"),
+            _ignoreLongTermRewardsAtRunEnd,
+            SolverText.Get("最终 Boss 战之后没有下一场：卡遗物计数、局外成长和金币收益在那一场都无法兑现。")
+                + SolverText.Get("开启后该场自动按「不考虑局外收益」处理——不卡遗物计数、不刷成长，也不为它们多付血；")
+                + SolverText.Get("手动配置原样保留，下一场战斗照常生效。默认开启。重新计算后生效。"));
 
         GridContainer executionGrid = CreateSettingsGrid();
         _stopOnCombatEnd = CreateToggle();
@@ -290,6 +303,15 @@ internal sealed partial class SolverSettingsPanel
         _stopOnCombatEnd.ButtonPressed = data.StopFullAutoOnCombatEnd;
         _stopOnDeathTurn.ButtonPressed = data.StopFullAutoOnDeathTurn;
         _stopOnWorseRecalculation.ButtonPressed = data.StopFullAutoOnWorseRecalculation;
+        _ignoreLongTermRewardsAtRunEnd.SetPressedNoSignal(data.IgnoreLongTermRewardsAtRunEnd);
+    }
+
+    private void OnIgnoreLongTermRewardsAtRunEndToggled(bool enabled)
+    {
+        if (_loading)
+            return;
+        SolverSettings.Update(SolverSettings.Current with { IgnoreLongTermRewardsAtRunEnd = enabled });
+        SetStatus(SolverText.Get("已保存，重新计算后生效"), SolverUiTokens.Palette.Success);
     }
 
     private OptionButton CreateSearchCompletionNotificationPolicyInput()

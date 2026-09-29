@@ -103,6 +103,12 @@ internal sealed record SolverSettingsData
     /// 在 Beam 里保留路线；最终选择里的字典序位置不变，所以白拿的收益照样拿。
     /// </summary>
     public bool IgnoreLongTermRewards { get; init; }
+    /// <summary>
+    /// 终局战自动无视卡遗物、卡成长。最后一幕 Boss（A10 双 Boss 模式下的第二只）之后没有下一场
+    /// 战斗：卡遗物计数、局外成长和金币收益在那一场都无法兑现。开启后该场自动按
+    /// 「不考虑局外收益」处理并撤掉遗物计数目标，玩家手动配置原样保留、下场战斗照常生效。
+    /// </summary>
+    public bool IgnoreLongTermRewardsAtRunEnd { get; init; } = true;
     public BossHpStrategy ActTransitionBossHpStrategy { get; init; } = BossHpStrategy.ProgressionFirst;
     public BossHpStrategy FinalBossHpStrategy { get; init; } = BossHpStrategy.ProgressionFirst;
     public int AcceptableBattleHpLoss { get; init; }
@@ -159,6 +165,7 @@ internal sealed record SolverSettingsSnapshot(
     public GrowthValues GrowthBudgets { get; init; }
     public int? BrightestFlameMaxHpLossLimit { get; init; }
     public bool IgnoreLongTermRewards { get; init; }
+    public bool IgnoreLongTermRewardsAtRunEnd { get; init; } = true;
     public bool UseBeamWidthPortfolio { get; init; }
     public bool UseNoveltyPortfolio { get; init; }
     public bool UseEarlyTurnExploration { get; init; }
@@ -324,6 +331,7 @@ internal static class SolverSettings
             StopAtAcceptableBattleHpLoss = data.StopAtAcceptableBattleHpLoss,
             BrightestFlameMaxHpLossLimit = data.BrightestFlameMaxHpLossLimit,
             IgnoreLongTermRewards = data.IgnoreLongTermRewards,
+            IgnoreLongTermRewardsAtRunEnd = data.IgnoreLongTermRewardsAtRunEnd,
             UseBeamWidthPortfolio = data.UseBeamWidthPortfolio,
             UseNoveltyPortfolio = data.UseNoveltyPortfolio,
             UseEarlyTurnExploration = data.UseEarlyTurnExploration,

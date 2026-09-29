@@ -215,4 +215,12 @@ internal static class ActEndingBossPolicy
 
     public static bool IsRecoveryFight(CombatState combatState)
         => ResolveHpRelief(combatState) != BossHpRelief.None;
+
+    /// <summary>
+    /// 这场战斗是不是整局的最后一场：单 Boss 模式下的第三幕 Boss，或 A10 双 Boss 模式下的
+    /// 第二只。单层地图时通常落在第 49 层；多人模式、双 Boss 与每幕房间数的差异都会让
+    /// 具体层数浮动，所以一律按战斗身份判定，不按层数。
+    /// </summary>
+    public static bool IsRunEndingFight(CombatState combatState)
+        => ResolveHpRelief(combatState) == BossHpRelief.RunEnding;
 }

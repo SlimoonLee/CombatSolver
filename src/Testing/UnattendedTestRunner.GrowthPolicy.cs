@@ -134,6 +134,20 @@ internal sealed partial class UnattendedTestRunner
         Check(!new SolverSettingsData().IgnoreLongTermRewards, "the ignore switch defaults to off");
         Check(SolverSettings.RoundTripForTesting(original with { IgnoreLongTermRewards = true }).IgnoreLongTermRewards,
             "the ignore switch round trips through settings");
+        // 「终局战自动无视卡遗物、卡成长」：默认开启，可关、可持久化；旧设置文件里没有这个字段，
+        // 读进来必须落在开启上，否则终局 Boss 战会重新为无法兑现的收益付血。
+        Check(new SolverSettingsData().IgnoreLongTermRewardsAtRunEnd, "the run-end auto ignore defaults to on");
+        Check(!SolverSettings.RoundTripForTesting(original with { IgnoreLongTermRewardsAtRunEnd = false })
+            .IgnoreLongTermRewardsAtRunEnd, "the run-end auto ignore round trips through settings");
+        Check(SolverSettings.DeserializeForTesting(
+                "{\"growthBudgets\":{\"geneticAlgorithm\":7},\"ignoreLongTermRewards\":false}")
+            .IgnoreLongTermRewardsAtRunEnd, "settings written before the run-end switch load with it on");
+        bool runEndingFixture = ActEndingBossPolicy.IsRunEndingFight(combat);
+        SearchPolicySnapshot runEndCapture = SolverController.CaptureSearchPolicy(
+            SolverSettings.Capture(), combat, false, null);
+        Check(runEndCapture.IgnoreLongTermRewards
+            == (SolverSettings.Current.IgnoreLongTermRewards || runEndingFixture),
+            "run-end auto ignore turns on exactly for run-ending fights");
         SearchPolicySnapshot ignoring = growthPolicy with
         {
             IgnoreLongTermRewards = true,

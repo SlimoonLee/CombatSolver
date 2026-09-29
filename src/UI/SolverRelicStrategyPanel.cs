@@ -11,6 +11,7 @@ internal sealed partial class SolverRelicStrategyPanel : PanelContainer
     private sealed record Row(RelicCounterCatalog.Entry Entry, CheckButton Enabled, SpinBox Minimum, SpinBox Maximum, SpinBox Hp, SpinBox Priority, Label Status, Control Card, TextureRect Icon);
     private readonly List<Row> _rows = [];
     private readonly CheckButton _enabled;
+    private readonly Label _runEndNote;
     private bool _refreshing;
     private readonly VBoxContainer _cards = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
     private readonly CheckButton _showUnowned;
@@ -50,6 +51,14 @@ internal sealed partial class SolverRelicStrategyPanel : PanelContainer
         _showUnowned = SolverSettingsPanel.CreateToggle();
         filter.AddChild(_showUnowned);
         layout.AddChild(filter);
+        // 终局战之后没有下一场，计数卡得再准也无法兑现；求解器已自动摘掉这些目标。
+        // 这行小字解释「本场为什么不按计数找路线」，规则本身原样保留。
+        _runEndNote = SolverUiTokens.CreateLabel(
+            SolverText.Get("终局战：本场已自动无视遗物计数"), SolverUiTokens.Type.Caption, SolverUiTokens.Palette.Warning);
+        _runEndNote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _runEndNote.Name = "RunEndAutoIgnoreNote";
+        _runEndNote.Visible = false;
+        layout.AddChild(_runEndNote);
         ScrollContainer scroll = new() { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new(0, 160) };
         VBoxContainer rows = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -191,6 +200,9 @@ internal sealed partial class SolverRelicStrategyPanel : PanelContainer
             var settings = SolverSettings.Current;
             _enabled.Disabled = disabled;
             _enabled.SetPressedNoSignal(settings.RelicStrategyEnabled);
+            bool runEndIgnored = !disabled
+                && SolverGrowthStrategyPanel.IsRunEndAutoIgnoreActive(settings);
+            _runEndNote.Visible = runEndIgnored;
             var state = CombatManager.Instance.DebugOnlyGetState();
             ulong ownedMask = 0;
             foreach (Row row in _rows)
@@ -199,7 +211,7 @@ internal sealed partial class SolverRelicStrategyPanel : PanelContainer
                     ?? new RelicCounterRule(row.Entry.Id, false, row.Entry.Period - 1, row.Entry.Period - 1, 0);
                 row.Enabled.Disabled = disabled || !settings.RelicStrategyEnabled;
                 row.Enabled.SetPressedNoSignal(rule.Enabled);
-                bool editable = !disabled && settings.RelicStrategyEnabled && rule.Enabled;
+                bool editable = !disabled && settings.RelicStrategyEnabled && rule.Enabled && !runEndIgnored;
                 foreach (var pair in new[] { (row.Minimum, rule.Minimum), (row.Maximum, rule.Maximum), (row.Hp, rule.HpAllowance), (row.Priority, rule.Priority) })
                 {
                     pair.Item1.Editable = editable;

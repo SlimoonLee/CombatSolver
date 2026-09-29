@@ -512,6 +512,14 @@ internal static partial class SolverController
                 $"搜索并行度必须在 1..{SolverWeights.MaximumSearchMaxDegreeOfParallelism} 之间，" +
                 $"实际为 {maxDegreeOfParallelism}。");
         }
+        // 「49 层」那一场：终局 Boss 之后没有下一场战斗，卡遗物计数与局外成长都无法兑现。
+        // 按设置在快照源头折算，不逐处判断——局外收益既是分数项，也是终局排序键、Beam 保路
+        // 泳道、必留泳道、Pareto 维度和 BeamRetentionPolicy.CompareFinalCandidates 的比较键，
+        // 逐处列举漏过两次（见 StateEvaluation 里的同款注释），源头清零按构造不会漏。
+        // 遗物计数目标没有 Effective* 通道，玩家配置又必须原样保留给下一场，所以只在这一个
+        // 捕获点摘掉；问题包里记录的是折算后的快照，玩家填了什么仍看 SolverSettings 转储。
+        bool ignoreLongTermRewardsAtRunEnd = settings.IgnoreLongTermRewardsAtRunEnd
+            && ActEndingBossPolicy.IsRunEndingFight(state);
         SearchPolicySnapshot policy = new(
             UnattendedTestRunner.BeamWeightPerturbationOverride is { } beamWeightPerturbation
                 ? settings.Profile with { BeamWeightPerturbation = beamWeightPerturbation }
@@ -566,11 +574,13 @@ internal static partial class SolverController
             // 这里记的是玩家填的原始值；「不考虑局外收益」的折算交给快照上的 Effective* 一处做，
             // 免得两边各判一次而走岔。问题包里两样都在，方便看出当时是填了额度还是开了开关。
             GrowthBudgets = settings.GrowthBudgets,
-            RelicTargets = RelicCounterCatalog.Capture(state, settings.RelicStrategyEnabled, settings.RelicCounterRules),
+            RelicTargets = ignoreLongTermRewardsAtRunEnd
+                ? Array.Empty<RelicCounterTarget>()
+                : RelicCounterCatalog.Capture(state, settings.RelicStrategyEnabled, settings.RelicCounterRules),
             StopAtAcceptableBattleHpLoss = settings.StopAtAcceptableBattleHpLoss,
             BrightestFlameMaxHpLossLimit = settings.BrightestFlameMaxHpLossLimit,
             GrowthOpportunityTargets = GrowthOpportunityPolicy.Capture(state),
-            IgnoreLongTermRewards = settings.IgnoreLongTermRewards,
+            IgnoreLongTermRewards = settings.IgnoreLongTermRewards || ignoreLongTermRewardsAtRunEnd,
         };
         CombatBugReportExporter.RecordSearchPolicy(state, policy);
         return policy;
