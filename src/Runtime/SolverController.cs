@@ -2849,7 +2849,10 @@ internal static partial class SolverController
                 {
                     // Keep the session open through the enemy turn so Knowledge Demon's
                     // Choose A Card page is driven by the same planned sequence.
-                    actionChoices.AddRange(action.TurnStartChoices);
+                    // MonsterBranch resolutions are prediction-internal: the native roll decides
+                    // the real branch and the next search re-observes it, so they never drive pages.
+                    actionChoices.AddRange(action.TurnStartChoices
+                        .Where(choice => choice.Effect != PlanChoiceEffect.MonsterBranch));
                 }
                 if (actionChoices.Count > 0)
                 {
@@ -3055,7 +3058,8 @@ internal static partial class SolverController
                 await host.ToSignal(host.GetTree(), SceneTree.SignalName.ProcessFrame);
                 token.ThrowIfCancellationRequested();
                 PlanCardChoice[] endTurnChoices = plannedEndTurn.TurnStartChoices?
-                    .Where(choice => choice.Timing is PlanChoiceTiming.PlayerTurnEnd or PlanChoiceTiming.EnemyTurn)
+                    .Where(choice => choice.Timing is PlanChoiceTiming.PlayerTurnEnd or PlanChoiceTiming.EnemyTurn
+                        && choice.Effect != PlanChoiceEffect.MonsterBranch)
                     .ToArray() ?? [];
                 if (endTurnChoices.Length > 0)
                 {
