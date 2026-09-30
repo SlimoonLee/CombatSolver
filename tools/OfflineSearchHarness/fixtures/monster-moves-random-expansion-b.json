@@ -1,0 +1,10 @@
+[
+  { "monsterId": "TwoTailedRat", "moveId": "SCRATCH_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "Flyconid", "moveId": "FRAIL_SPORES_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "SlitheringStrangler", "moveId": "THWACK", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "ScrollOfBiting", "moveId": "CHOMP", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "SludgeSpinner", "moveId": "OIL_SPRAY_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "TheObscura", "moveId": "PIERCING_GAZE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "SoulNexus", "moveId": "SOUL_BURN_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "SpectralKnight", "moveId": "SOUL_SLASH", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]

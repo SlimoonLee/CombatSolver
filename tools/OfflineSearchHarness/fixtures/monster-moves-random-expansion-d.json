@@ -1,0 +1,3 @@
+[
+  { "monsterId": "ToughEgg", "moveId": "HATCH_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]

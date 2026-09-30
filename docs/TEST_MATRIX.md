@@ -1,5 +1,17 @@
 # CombatSolver 测试清单
 
+## 随机怪物同族扩展全量验收（2026-10-01）
+21 个随机分支怪物 + 6 个效果随机怪物全部经 MonsterMoveChecks 严格差分通过（夹具 `monster-moves-random-expansion-a..f.json`，注入宿主或自然遭遇；代表三源于 2026-09-29 验收）。
+| 批次 | 来源 | 结果 |
+|---|---|---|
+| A（注入） | FlailKnight/FakeMerchantMonster/LeafSlimeS/TwigSlimeM/Inklet/PhrogParasite/FossilStalker | 7/7 Passed |
+| B（注入） | TwoTailedRat/Flyconid/SlitheringStrangler/ScrollOfBiting/SludgeSpinner/TheObscura/SoulNexus/SpectralKnight | 8/8 Passed |
+| C（注入） | DecimillipedeSegmentFront/HunterKiller/Mawler/Noisebot(塞牌)/SoulFysh(塞牌)/TheInsatiable(塞牌) | 6/6 Passed |
+| D（注入） | ToughEgg HATCH_MOVE（Niche 流孵化生命） | Passed |
+| E（自然遭遇） | Exoskeleton MANDIBLES+SKITTER（槽位条件分支） | 2/2 Passed |
+| F（自然遭遇） | Fabricator DISINTEGRATE_MOVE | Passed |
+教训：条件分支怪（外骨骼按槽位、组装师）不能裸注入（初始滚动无合法后继），须走自然遭遇；蜈蚣段需具体段类名（Front/Back/Middle）；DISINTEGRATE 是攻击招不能沿用召唤招的零掉血预期；无头宿主会枚举整个游戏目录，陈旧 `.combatsolver-precombat/process-*` 快照（150 个/约 15GB）与 worker GC 竞态会打断快照，需先清理；连续运行需等上一实例进程完全退出。
+
 ## 硬预算与截断偏差量化（2026-10-01，架构 4.4，行为零改动）
 B=3000ms 对照 8B=24000ms（无截断参照），qstats 双敌夹具 3 seed + 重复运行噪声对照 + 加权纠正实验（18 轮，未采纳）。报告见[预算偏差](strategy/blind-budget-bias-20261001.md)。
 | 发现 | 结果 |

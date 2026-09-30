@@ -55,10 +55,10 @@ pwsh tools/run-unattended-test.ps1 -ScenarioId "MONSTER-RANDOM-BRANCH" `
 
 ## 后续
 
-- 雾菇分支差分重跑(基础设施瞬态);
-- 同族扩展:每组其余怪物按代表夹具形状逐源验收;
-- 噪音机器人/灵魂异鱼/无厌沙虫的塞牌招随召唤链批;结实的卵随孵化链批;
-- 怪物私有 AI 可见性白名单(与架构第 4.1 合并)。
+- ~~雾菇分支差分重跑(基础设施瞬态)~~ **已完成**;
+- ~~同族扩展:每组其余怪物按代表夹具形状逐源验收~~ **已完成(2026-10-01)**:21 个分支怪 + 6 个效果随机怪全部严格差分通过,夹具 `monster-moves-random-expansion-a..f.json`(注入宿主默认遭遇,条件分支怪走自然遭遇);**零镜像缺口**——既有 BranchMonsterAi/MonsterMoveEffects 镜像覆盖全部来源。教训:①条件分支怪(外骨骼按槽位、组装师)不能裸注入——初始滚动在条件分支无合法后继(`No valid next state found`),须走自然遭遇;②蜈蚣段是抽象基类,夹具需具体段类名(DecimillipedeSegmentFront/Back/Middle);③组装师 DISINTEGRATE 是攻击招,不能沿用召唤招的零掉血预期;④无头宿主会枚举整个游戏目录做快照,陈旧 `.combatsolver-precombat/process-*` 快照(150 个/约 15GB)与 worker 自身的目录 GC 竞态会打断快照(`Get-Item` 找不到正被清理的文件),运行前先清理陈旧快照;⑤上一实例进程未完全退出会让下一次运行"准入超时"或"启动的不是实例私有游戏",连续运行需等待/清理残留进程。
+- ~~噪音机器人/灵魂异鱼/无厌沙虫的塞牌招随召唤链批;结实的卵随孵化链批~~ **已完成(2026-10-01)**:Noisebot NOISE_MOVE、SoulFysh DE_GAS_MOVE、TheInsatiable THRASH_MOVE 直接注入宿主即通过(塞牌为 Shuffle 流,无需召唤链);ToughEgg HATCH_MOVE 直接注入+强制孵化招即通过(Niche 流孵化生命差分一致)。
+- 怪物私有 AI 可见性白名单(与架构第 4.1 合并,**已完成**,见[可见字段白名单](blind-visibility-whitelist-20260929.md))。
 
 ## 更正(同晚,ai-counter 干净重实现后)
 

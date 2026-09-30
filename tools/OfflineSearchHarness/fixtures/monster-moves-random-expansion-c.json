@@ -1,0 +1,8 @@
+[
+  { "monsterId": "DecimillipedeSegmentFront", "moveId": "WRITHE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "HunterKiller", "moveId": "BITE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "Mawler", "moveId": "RIP_AND_TEAR_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "Noisebot", "moveId": "NOISE_MOVE", "clearPlayerPilesBeforeMove": true, "clearPlayerHandBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "SoulFysh", "moveId": "DE_GAS_MOVE", "clearPlayerPilesBeforeMove": true, "clearPlayerHandBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "TheInsatiable", "moveId": "THRASH_MOVE", "clearPlayerPilesBeforeMove": true, "clearPlayerHandBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]

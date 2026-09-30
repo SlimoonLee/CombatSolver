@@ -1,0 +1,3 @@
+[
+  { "monsterId": "Fabricator", "moveId": "DISINTEGRATE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]

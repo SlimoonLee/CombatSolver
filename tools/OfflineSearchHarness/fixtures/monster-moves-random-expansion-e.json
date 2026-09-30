@@ -1,0 +1,4 @@
+[
+  { "monsterId": "Exoskeleton", "moveId": "MANDIBLES_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "Exoskeleton", "moveId": "SKITTER_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]

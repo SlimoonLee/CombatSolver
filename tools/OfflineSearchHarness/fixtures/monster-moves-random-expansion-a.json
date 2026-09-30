@@ -1,0 +1,9 @@
+[
+  { "monsterId": "FlailKnight", "moveId": "FLAIL_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "FakeMerchantMonster", "moveId": "SWIPE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "LeafSlimeS", "moveId": "TACKLE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "TwigSlimeM", "moveId": "POKEY_POUNCE_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "Inklet", "moveId": "JAB_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "PhrogParasite", "moveId": "LASH_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 },
+  { "monsterId": "FossilStalker", "moveId": "LATCH_MOVE", "clearAllPowersBeforeMove": true, "playerHpBefore": 80, "enemyHpBefore": 999 }
+]
