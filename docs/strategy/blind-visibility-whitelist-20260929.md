@@ -40,6 +40,8 @@
 
 进一步调查收敛了范围:五个计数中,`_extraMultiClawCount`/`_respawns`/`_turnsUntilSummonable`/`_callForBackupCount` 的全部读取点都在**模拟演进内**(模拟按自身公开事件维护,非根捕获直读),不在整改范围;真正在根捕获/意图预测时直读 live 私有字段的只有**知识恶魔诅咒计数**(BranchMonsterAi.Capture 与 IntentForecaster 两处)。
 
-已实现:两处直读改为 StateLog 重建——原版计数器只在 `CurseOfKnowledgeMove`(公开招式,live 战斗)内递增、初值 0,故 `StateLog` 中该招的出现次数恒等于私有字段值;StateLog 本就在快照中。
+已实现:两处直读改为 StateLog 重建——原版计数器只在 `CurseOfKnowledgeMove`(公开招式,live 战斗)内递增、初值 0,统计 `StateLog` 中该招出现次数即可避免直读;StateLog 本就在快照中。
 
-验证状态:等价性由"递增点与 StateLog 同源(同一状态机记录)"论证;**CURSE 招强制差分未能运行**——知识恶魔 Boss 遭遇在无头环境建局卡死(启动器 300 秒超时,与本次改动无关,日志 `.local/kd-curse.log`),夹具 `monster-moves-kd-curse.json` 已入库待无头环境可行时补跑。模拟侧自身的计数维护(MonsterMoveEffects 的 Set/Get)不受影响。
+**勘误(2026-10-01)**:上述"`StateLog` 出现次数恒等于私有字段值"在**待执行招恰为诅咒招**时不成立——状态机日志末位是已抽取、尚未执行的当前招式(开局即为 CURSE),朴素计数比字段值大 1,会让模拟侧选错诅咒选项集(取 `set[1]` 而非 `set[0]`)并把瓦解伤害按 7 而非 6 结算。已修正为"已完成计数"语义:重建时若日志末位是 CURSE 则减 1(`BranchMonsterAi.ReconstructKnowledgeDemonCurseCounter`,Capture 与 IntentForecaster 共用)。该缺陷由 4.3a 的 KD 计划选择接入暴露并随其修复。
+
+验证状态:等价性由"递增点与 StateLog 同源(同一状态机记录)"论证;CURSE 招差分最初因无头 Boss 建局卡死未能运行,后经独立挂起选择通道转绿;2026-10-01 起 ai-counter 审计携带 KD 计划选择完成全量两回合 Stamp 对账(6 项 Passed:计划诅咒在敌人回合内消费、状态机恰推进一次、无边界、日志重建==直读==1、瓦解 Power 在场、完整 RNG/牌堆/Power 对账)。

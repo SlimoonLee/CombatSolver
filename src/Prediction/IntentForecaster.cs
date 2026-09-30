@@ -66,10 +66,10 @@ internal static class IntentForecaster
         public MoveState Current { get; set; } = monster.NextMove;
         public bool Active { get; set; } = true;
         public List<string> Log { get; } = monster.MoveStateMachine?.StateLog.Select(state => state.Id).ToList() ?? [];
-        // Reconstructed from the executed-move log: the vanilla counter increments inside
-        // CurseOfKnowledgeMove only, so the log count equals the private field.
+        // Reconstructed completed-curse count from the executed-move log; the log's last entry is
+        // the pending move and does not count (see BranchMonsterAi.ReconstructKnowledgeDemonCurseCounter).
         public int KnowledgeDemonCurseCounter { get; set; } = monster.GetType().Name == "KnowledgeDemon"
-            ? monster.MoveStateMachine?.StateLog.Count(state => state.Id == "CURSE_OF_KNOWLEDGE_MOVE") ?? 0
+            ? BranchMonsterAi.ReconstructKnowledgeDemonCurseCounter(monster)
             : 0;
     }
 

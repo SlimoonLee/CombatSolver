@@ -1,5 +1,14 @@
 # CombatSolver 测试清单
 
+## KD 计划选择接入 EndTurn 回放（2026-10-01，架构 4.3 前置项）
+ai-counter 审计恢复全量两回合 Stamp 对账:EndTurn 携带 `ApplyKnowledgeCurse` 计划选择,`Resolve` 在敌人回合从原始计划列表消费;顺带修复 4.1 重建差一(StateLog 末位待执行招不计数,详见白名单文档勘误)。
+| 场景 | 结果 |
+|---|---|
+| audit ai-counter(blind-kd-curse,含全量 Stamp 对账) | Passed 6 项(原 3 项) |
+| audit initial-relic(blind-bighat 固定牌组 / blind-orange-dough) | Passed 6/6 项 |
+| audit effects(blind-attack-potion)/ delayed(blind-delayed-energy) | Passed 35/17 项 |
+| 门禁 | REFACTOR_BOUNDARIES_OK search_files=241 |
+
 ## 多 seed 质量统计首报（2026-09-29 晚，架构第 6 步）
 方法与 A/B 结论见[多 seed 质量统计](strategy/blind-qstats-20260929.md);DLL 经 OFFLINE_HARNESS_COMBATSOLVER_DLL 切换,基线 1e4ec5b 对照 HEAD。
 | 场景 | 基线平均/尾部战损 | 逐选项评分平均/尾部 |

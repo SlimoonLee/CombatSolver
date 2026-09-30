@@ -116,16 +116,39 @@ internal static class BranchMonsterAi
         MonsterMoveStateMachine machine = monster.MoveStateMachine
             ?? throw new InvalidOperationException($"怪物 {monster.Id.Entry} 没有行动状态机。");
         IReadOnlyList<string> stateLog = machine.StateLog.Select(state => state.Id).ToArray();
-        // The vanilla counter increments inside CurseOfKnowledgeMove (live combat only), so counting
-        // that move in the executed-move log reconstructs it from public history without the field.
-        int curseCounter = stateLog.Count(id => id == "CURSE_OF_KNOWLEDGE_MOVE");
+        int curseCounter = monster.GetType().Name == "KnowledgeDemon"
+            ? ReconstructKnowledgeDemonCurseCounter(machine, stateLog)
+            : 0;
         return new(
             monster,
             machine,
             monster.NextMove,
             stateLog,
-            monster.GetType().Name == "KnowledgeDemon" ? curseCounter : 0,
+            curseCounter,
             BranchMonsterStaticSnapshot.Capture(monster));
+    }
+
+    /// <summary>
+    /// 重建知识恶魔已完成诅咒计数：原版字段只在 CurseOfKnowledgeMove 内递增，统计日志中的该招
+    /// 即可避免直读私有字段；但日志末位是已抽取、尚未执行的待执行招式，未完成不计入。
+    /// </summary>
+    public static int ReconstructKnowledgeDemonCurseCounter(MonsterModel monster)
+    {
+        MonsterMoveStateMachine machine = monster.MoveStateMachine
+            ?? throw new InvalidOperationException($"怪物 {monster.Id.Entry} 没有行动状态机。");
+        return ReconstructKnowledgeDemonCurseCounter(
+            machine,
+            machine.StateLog.Select(state => state.Id).ToArray());
+    }
+
+    public static int ReconstructKnowledgeDemonCurseCounter(
+        MonsterMoveStateMachine machine,
+        IReadOnlyList<string> stateLog)
+    {
+        int curseCounter = stateLog.Count(id => id == "CURSE_OF_KNOWLEDGE_MOVE");
+        if (stateLog.Count > 0 && stateLog[^1] == "CURSE_OF_KNOWLEDGE_MOVE")
+            curseCounter--;
+        return curseCounter;
     }
 
     public static ForecastMove CurrentMove(BranchMonsterAiState state, SimulatedCombatState combat)

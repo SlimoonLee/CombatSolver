@@ -65,6 +65,7 @@
 3. **随机怪物** **部分完成(2026-09-29 晚)**:来源清单与分组见[随机怪物来源清单](blind-rng-monsters-20260929.md)。组代表经 MonsterMoveChecks 严格差分:随机召唤(组装师 FABRICATE_MOVE,FABRICATOR_NORMAL 遭遇)**Passed**、随机偷牌(偷窃草蜢 THIEVERY_MOVE)**Passed**分支代表(雾菇 SWIPE_MOVE→BRANCH 链)重跑 **Passed**;噪音机器人经组装师召唤链覆盖,结实的卵随孵化链批。怪物私有 AI 可见字段审计作为同族扩展前置(与第 5 条白名单合并推进)。
 4. **低语耳环**:第一回合自动出牌引擎 + AnyAlly 多人目标,按单人硬约束保持边界。
 5. **架构任务**(建议顺序):~~全局可见字段白名单~~ **审计+严格化完成**(见[可见字段白名单审计](blind-visibility-whitelist-20260929.md)):无隐藏未来进入决策;知识恶魔诅咒计数已改 StateLog 重建(消除根捕获直读),CURSE 招差分因无头 Boss 建局卡死待补;其余四计数读取点在模拟演进内不属整改;五个公开事件可推导计数的实现等价性论证在审计文档。~~通用逐选项 blind 评分~~ **已完成(2026-09-29 晚)**:盲轨迹对卡牌选择(发现族/探寻打击及一切经 OwnChoice 的卡牌选择来源)实现逐选项强制重放+独立内层评分,择优继续轨迹,逐选项分数以 `CardChoices` 入评估输出(ValueScope=独立确定化提案);发现族五场景+审计+药水/攻击回归全过。~~多 seed 质量统计~~ **首报完成(2026-09-29 晚)**:DLL A/B(逐选项评分前/后)在候选影响战局场景中平均战损 4.22→1.67、尾部 9.00→3.67;方法与口径见[多 seed 质量统计](blind-qstats-20260929.md)。剩余:复杂嵌套选择和取消排空、硬预算与截断偏差、Mod 在线 blind UI。
+   - **2026-10-01 增量(KD 计划选择接入 EndTurn 回放,取消排空前置项之一转绿)**:ai-counter 审计恢复全量两回合 Stamp 对账——EndTurn 动作携带 `PlanChoiceEffect.ApplyKnowledgeCurse` 计划选择(SourceId `KNOWLEDGE_DEMON:{combatId}:{counter}`,选项序对齐原生 ChooseCurse 屏幕序,FirstVisibleCardSelector 取首项),`KnowledgeDemonChoiceSupport.Resolve` 在敌人回合从原始计划列表消费;6 项 Passed(重建==直读==1、瓦解 Power 在场、完整 RNG/牌堆/Power 对账)。接入暴露并修复了 4.1 严格化的**计数器重建差一**:StateLog 末位是待执行招式,待执行招恰为 CURSE 时朴素计数比字段大 1(开局根捕获即中),已改"已完成计数"语义(Capture 与 IntentForecaster 共用 `ReconstructKnowledgeDemonCurseCounter`),详见白名单文档勘误。回归:initial-relic 双夹具、effects 攻击药水、delayed 全 Passed,门禁 `REFACTOR_BOUNDARIES_OK search_files=241`。
 
 ## 7. 审核要点清单
 

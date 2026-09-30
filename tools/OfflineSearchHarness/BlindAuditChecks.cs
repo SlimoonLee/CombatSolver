@@ -356,7 +356,20 @@ internal static class BlindAuditChecks
             // Knowledge Demon curse counter reconstruction differential: EndTurn lets the demon
             // play its curse move (vanilla counter 0→1), then the StateLog-reconstructed count
             // must equal the vanilla private field without ever reading it in production paths.
-            PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber);
+            // The chosen curse card is planned on the EndTurn action: KnowledgeDemonChoiceSupport
+            // reads it straight off the raw turn-start plan list during the enemy turn, so the
+            // replay applies the same curse the native FirstVisibleCardSelector picks (first option).
+            var demon = root.Enemies.Single(enemy => enemy.Monster?.Id.Entry == "KNOWLEDGE_DEMON");
+            var curseRequest = new KnowledgeDemonChoiceRequest(
+                demon,
+                0,
+                $"KNOWLEDGE_DEMON:{demon.CombatId ?? uint.MaxValue}:0",
+                [
+                    CanonicalModels.Card<MegaCrit.Sts2.Core.Models.Cards.Disintegration>().Id.Entry,
+                    CanonicalModels.Card<MegaCrit.Sts2.Core.Models.Cards.MindRot>().Id.Entry,
+                ]);
+            PlanCardChoice curseChoice = KnowledgeDemonChoiceSupport.BuildChoices(curseRequest, names)[0];
+            PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber, TurnStartChoices: [curseChoice]);
             // ChooseCurse opens a real choose-a-card screen for the player; headless needs a selector.
             var curseSelector = new FirstVisibleCardSelector();
             using var curseScope = CardSelectCmd.PushSelector(curseSelector);
@@ -364,11 +377,18 @@ internal static class BlindAuditChecks
             try
             {
                 var twoTurnsSim = (CombatPredictionSimulator)twoTurns.Simulator;
-                var simDemon = ((SimulatedCombatState)twoTurnsSim.State.CombatState).Enemies
+                var simState = (SimulatedCombatState)twoTurnsSim.State.CombatState;
+                var simDemon = simState.Enemies
                     .Select(creature => creature.Monster).Single(model => model != null && model.Id.Entry == "KNOWLEDGE_DEMON");
                 int simAdvanced = simDemon!.MoveStateMachine.StateLog
                     .Count(state => state.Id == "CURSE_OF_KNOWLEDGE_MOVE");
+                Check(simState.PendingKnowledgeDemonChoice == null,
+                    "planned curse choice resolves during the enemy turn without a pending request " +
+                    $"(planned={curseChoice.SourceId}, pending={simState.PendingKnowledgeDemonChoice?.SourceId}, simAdvanced={simAdvanced})");
                 Check(simAdvanced == 1, "simulation advances the demon state machine exactly once");
+                Check(twoTurns.BoundaryReason == SearchBoundaryReason.None,
+                    "two-turn replay with the planned curse completes without a boundary");
+                string projected = Stamp(root, twoTurns);
                 ExecuteNative(live, endTurn, loop, settleSeconds: 60);
                 var liveDemon = live.Enemies
                     .Select(creature => creature.Monster).Single(model => model != null && model.Id.Entry == "KNOWLEDGE_DEMON");
@@ -378,10 +398,10 @@ internal static class BlindAuditChecks
                 Check(reconstructed == 1, "curse move appears in the executed-move log exactly once");
                 Check(reconstructed == direct,
                     "StateLog-reconstructed counter equals the vanilla private field");
-                // Full two-turn Stamp reconciliation is intentionally omitted: the demon's curse
-                // application flows through the dedicated KD pending-choice channel, so verifying
-                // the chosen curse card needs planned-choice plumbing (complex nested choices).
-                evidence.Add(new { stage = "ai_counter_reconstruction", reconstructed, direct });
+                Check(projected == ContinuationStamp.CaptureLive(live).StateText,
+                    "two-turn native lifecycle matches the full predicted continuation including the chosen curse");
+                evidence.Add(new { stage = "ai_counter_reconciliation", reconstructed, direct,
+                    curse = curseChoice.Cards[0].CardId });
             }
             finally { twoTurns.ReleaseSimulator(); }
         }
