@@ -1203,7 +1203,7 @@ internal static partial class SolverController
             CombatRootSnapshot rootSnapshot;
             try
             {
-                rootSnapshot = CombatRootSnapshot.Capture(state, settings.PredictPotionReward);
+                rootSnapshot = CombatRootSnapshot.Capture(state, settings.PredictPotionReward, settings.ProbabilityBranches);
             }
             finally
             {

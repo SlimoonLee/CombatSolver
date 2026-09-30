@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json;
 using CombatSolver;
+using CombatSolver.Engine.Common;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 
@@ -455,7 +456,9 @@ internal static class ModRuntime
         if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_PROBE_ROOT") == "1")
             ProbeRootCapture(state);
         System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
-        CombatRootSnapshot root = CombatRootSnapshot.Capture(state);
+        bool probabilityBranches =
+            Environment.GetEnvironmentVariable("OFFLINE_HARNESS_PROBABILITY_BRANCHES") == "1";
+        CombatRootSnapshot root = CombatRootSnapshot.Capture(state, predictPotionReward: false, probabilityBranches);
         if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_BLIND_CHECKS") == "1")
             File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-checks.json"),
                 JsonSerializer.Serialize(BlindSearchContracts.Run(root), UnattendedTestFiles.JsonOptions));
@@ -531,6 +534,8 @@ internal static class ModRuntime
         }
         bool timeBoundary = false;
         object describedPolicy = DescribePolicy(policy);
+        // 概率分支模式的零接触证据：搜索前后原生九流计数器必须逐位相同。
+        string beforeCounters = DescribeNativeRngCounters(state);
         SolverResult result;
         BlindSearchResult? blindResult = null;
         if (options.EnableNoGcRegion)
@@ -629,6 +634,19 @@ internal static class ModRuntime
             ["combat_mod_subscribers"] = root.CapturedCombatModSubscriberCount,
             ["base_lib_card_modifiers"] = root.CapturedBaseLibCardModifiers,
         };
+        if (probabilityBranches)
+        {
+            // 概率分支模式的零接触证据：搜索前后原生九流计数器必须逐位相同。
+            string afterCounters = DescribeNativeRngCounters(state);
+            File.WriteAllText(Path.Combine(options.OutputDirectory, "native-rng-counters.json"),
+                JsonSerializer.Serialize(new
+                {
+                    mode = "probability_branches",
+                    zeroContact = string.Equals(beforeCounters, afterCounters, StringComparison.Ordinal),
+                    before = beforeCounters,
+                    after = afterCounters,
+                }, Program.Json));
+        }
         return new SearchOutcome(
             result,
             session?.CaptureSolverMetrics(result),
@@ -657,6 +675,18 @@ internal static class ModRuntime
             timeBoundary,
             watch.Elapsed.TotalSeconds);
     }
+
+    private static string DescribeNativeRngCounters(CombatState state)
+        => string.Join(",",
+            state.RunState.Rng.Shuffle.Counter(),
+            state.RunState.Rng.CombatCardGeneration.Counter(),
+            state.RunState.Rng.CombatPotionGeneration.Counter(),
+            state.RunState.Rng.CombatCardSelection.Counter(),
+            state.RunState.Rng.CombatEnergyCosts.Counter(),
+            state.RunState.Rng.CombatTargets.Counter(),
+            state.RunState.Rng.CombatOrbGeneration.Counter(),
+            state.RunState.Rng.MonsterAi.Counter(),
+            state.RunState.Rng.Niche.Counter());
 
     private static Dictionary<string, object?> BuildLegacyMetrics(SolverResult result)
     {

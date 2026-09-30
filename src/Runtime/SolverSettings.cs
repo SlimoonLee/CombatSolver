@@ -170,6 +170,11 @@ internal sealed record SolverSettingsSnapshot(
     public bool UseNoveltyPortfolio { get; init; }
     public bool UseEarlyTurnExploration { get; init; }
     public bool PredictPotionReward { get; init; }
+    /// <summary>
+    /// 无原生随机数模式（概率分支）：根捕获/影子世界零读写原生 RunState.Rng，
+    /// 随机效果由概率分支或影子自造种子承担。
+    /// </summary>
+    public bool ProbabilityBranches { get; init; }
 }
 
 internal static class SolverSettings

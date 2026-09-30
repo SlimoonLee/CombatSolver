@@ -147,7 +147,10 @@ internal sealed class CombatRootSnapshot
         PotionRewardOutlook = potionRewardOutlook;
     }
 
-    public static CombatRootSnapshot Capture(CombatState state, bool predictPotionReward = false)
+    public static CombatRootSnapshot Capture(
+        CombatState state,
+        bool predictPotionReward = false,
+        bool probabilityBranches = false)
     {
         if (!NGame.IsMainThread())
             throw new InvalidOperationException("Combat root snapshot must be captured on the main thread.");
@@ -158,11 +161,12 @@ internal sealed class CombatRootSnapshot
 
         PowerDynamicVarWarmup.EnsureMaterialized(state);
         CardDynamicVarWarmup.EnsureMaterialized(state);
+        bool includeRng = !probabilityBranches;
 
         // Listener enumeration and third-party owner discovery are part of root capture.
         // Take the baseline first so any semantic mutation in those callbacks is rejected by
         // the existing after-capture stamp without paying for another full serialization.
-        ContinuationStamp continuationBefore = ContinuationStamp.CaptureLive(state);
+        ContinuationStamp continuationBefore = ContinuationStamp.CaptureLive(state, includeRng);
         LiveCombatStamp liveBefore = LiveCombatStamp.FromContinuation(continuationBefore);
 
         Player player = LocalContext.GetMe(state)
@@ -177,16 +181,20 @@ internal sealed class CombatRootSnapshot
                     .Where(candidate => candidate.PlayerCombatState != null)
                     .SelectMany(candidate => candidate.PlayerCombatState!.AllCards));
         }
-        IntentForecast forecast = IntentForecaster.Build(state, SolverWeights.SetupValueHorizonTurns);
+        IntentForecast forecast = IntentForecaster.Build(
+            state,
+            SolverWeights.SetupValueHorizonTurns,
+            probabilityBranches);
 
-        SimulatedCombatState simulatedCombat = new(state, liveCombatHookListeners);
+        SimulatedCombatState simulatedCombat = new(state, liveCombatHookListeners, probabilityBranches);
         CombatPredictionSimulator simulator = new(simulatedCombat);
         ContinuationStamp projected = ContinuationStamp.CapturePredicted(
             player,
             simulator,
             playerState.TurnNumber,
             forecast,
-            playerState.TurnNumber);
+            playerState.TurnNumber,
+            includeRng);
         bool hasUnusedCardReplayAllocator = simulatedCombat.RelicsOf(player)
             .OfType<ThrowingAxe>()
             .Any(relic => !relic.IsMelted && !relic._usedThisCombat);
@@ -227,7 +235,7 @@ internal sealed class CombatRootSnapshot
                 continuationBefore.DescribeFirstDifference(projected));
         }
 
-        ContinuationStamp continuationAfter = ContinuationStamp.CaptureLive(state);
+        ContinuationStamp continuationAfter = ContinuationStamp.CaptureLive(state, includeRng);
         LiveCombatStamp liveAfter = LiveCombatStamp.FromContinuation(continuationAfter);
         if (!string.Equals(liveBefore.StateText, liveAfter.StateText, StringComparison.Ordinal)
             || !string.Equals(

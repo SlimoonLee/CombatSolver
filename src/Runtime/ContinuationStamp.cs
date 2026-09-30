@@ -64,7 +64,7 @@ internal sealed record ContinuationStamp(string StateText)
         return differences;
     }
 
-    public static ContinuationStamp CaptureLive(CombatState state)
+    public static ContinuationStamp CaptureLive(CombatState state, bool includeRng = true)
     {
         Player player = LocalContext.GetMe(state)
             ?? throw new InvalidOperationException("找不到本地玩家。");
@@ -101,16 +101,17 @@ internal sealed record ContinuationStamp(string StateText)
         if (PredictionModHookSubscriberCapture.CaptureLiveLoadoutSummonPowerState(state) is { } loadoutSummonState)
             text.Append(";loadout_summon_powers=").Append(loadoutSummonState);
         AppendPowers(text, state.Creatures.SelectMany(creature => creature.Powers));
-        AppendRng(text,
-            state.RunState.Rng.Shuffle.CaptureState(),
-            state.RunState.Rng.CombatCardGeneration.CaptureState(),
-            state.RunState.Rng.CombatPotionGeneration.CaptureState(),
-            state.RunState.Rng.CombatCardSelection.CaptureState(),
-            state.RunState.Rng.CombatEnergyCosts.CaptureState(),
-            state.RunState.Rng.CombatTargets.CaptureState(),
-            state.RunState.Rng.CombatOrbGeneration.CaptureState(),
-            state.RunState.Rng.MonsterAi.CaptureState(),
-            state.RunState.Rng.Niche.CaptureState());
+        if (includeRng)
+            AppendRng(text,
+                state.RunState.Rng.Shuffle.CaptureState(),
+                state.RunState.Rng.CombatCardGeneration.CaptureState(),
+                state.RunState.Rng.CombatPotionGeneration.CaptureState(),
+                state.RunState.Rng.CombatCardSelection.CaptureState(),
+                state.RunState.Rng.CombatEnergyCosts.CaptureState(),
+                state.RunState.Rng.CombatTargets.CaptureState(),
+                state.RunState.Rng.CombatOrbGeneration.CaptureState(),
+                state.RunState.Rng.MonsterAi.CaptureState(),
+                state.RunState.Rng.Niche.CaptureState());
         return new ContinuationStamp(text.ToString());
     }
 
@@ -119,7 +120,8 @@ internal sealed record ContinuationStamp(string StateText)
         CombatPredictionSimulator simulator,
         int turn,
         IntentForecast forecast,
-        int startTurnNumber)
+        int startTurnNumber,
+        bool includeRng = true)
     {
         SimPlayerCombatState pcs = simulator.State.GetPlayerCombatState(player);
         SimCreatureState simulatedPlayer = simulator.State.GetCreature(player.Creature);
@@ -166,16 +168,17 @@ internal sealed record ContinuationStamp(string StateText)
         if (combat.HasInactiveLoadoutSummonPowers)
             text.Append(";loadout_summon_powers=empty");
         AppendPowers(text, combat.EffectivePowers(), simulator);
-        AppendRng(text,
-            simulator.Rng.ShuffleState,
-            simulator.Rng.CombatCardGenerationState,
-            simulator.Rng.CombatPotionGenerationState,
-            simulator.Rng.CombatCardSelectionState,
-            simulator.Rng.CombatEnergyCostsState,
-            simulator.Rng.CombatTargetsState,
-            simulator.Rng.CombatOrbGenerationState,
-            simulator.Rng.MonsterAiState,
-            simulator.Rng.NicheState);
+        if (includeRng)
+            AppendRng(text,
+                simulator.Rng.ShuffleState,
+                simulator.Rng.CombatCardGenerationState,
+                simulator.Rng.CombatPotionGenerationState,
+                simulator.Rng.CombatCardSelectionState,
+                simulator.Rng.CombatEnergyCostsState,
+                simulator.Rng.CombatTargetsState,
+                simulator.Rng.CombatOrbGenerationState,
+                simulator.Rng.MonsterAiState,
+                simulator.Rng.NicheState);
         return new ContinuationStamp(text.ToString());
     }
 

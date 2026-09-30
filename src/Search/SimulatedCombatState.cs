@@ -240,12 +240,18 @@ internal sealed partial class SimulatedCombatState
 
     public SimulatedCombatState(
         CombatState inner,
-        AbstractModel[]? capturedCombatHookListeners = null)
+        AbstractModel[]? capturedCombatHookListeners = null,
+        bool probabilityBranches = false)
     {
         if (!NGame.IsMainThread())
             throw new InvalidOperationException("Live combat state can only be captured on the main thread.");
         _runState = inner.RunState;
-        _runRngSnapshot = inner.RunState.Rng.ToSerializable();
+        // 概率分支模式零原生随机数接触：影子基础流由战斗局面派生的自造种子构成，
+        // 不读也不写原生 RunState.Rng（未迁移的镜像效果消费这些自造流）。
+        ulong noRngSeed = DeriveNoRngSeed(inner);
+        _runRngSnapshot = probabilityBranches
+            ? CombatPredictionRngSet.FromSampleSeed(noRngSeed).ToSampleRunSnapshot(noRngSeed)
+            : inner.RunState.Rng.ToSerializable();
         _currentActIndex = inner.RunState.CurrentActIndex;
         _currentRoomType = inner.RunState.CurrentRoom?.RoomType;
         _currentMapCoord = inner.RunState.CurrentMapCoord;
@@ -1612,6 +1618,15 @@ internal sealed partial class SimulatedCombatState
 
     CombatPredictionRngSet ICombatPredictionRunSnapshot.CreatePredictionRngSet()
         => CombatPredictionRngSet.From(RunRngSet.FromSave(_sampleRunRngSnapshot ?? _runRngSnapshot));
+
+    /// <summary>概率分支模式的影子种子：从战斗回合数等可见局面量派生，零随机数对象接触。</summary>
+    private static ulong DeriveNoRngSeed(CombatState inner)
+    {
+        ulong value = (ulong)inner.RoundNumber * 0x9E3779B97F4A7C15UL
+            ^ ((ulong)(uint)inner.Players.Count + 1) * 0xBF58476D1CE4E5B9UL;
+        value = (value ^ (value >> 30)) * 0x94D049BB133111EBUL;
+        return value ^ (value >> 31);
+    }
 
     internal void SetSampleRunRngSnapshot(ulong sampleSeed, CombatPredictionRngSet rng)
         => _sampleRunRngSnapshot = rng.ToSampleRunSnapshot(sampleSeed);

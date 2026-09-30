@@ -73,17 +73,20 @@ internal static class IntentForecaster
             : 0;
     }
 
-    public static IntentForecast Build(CombatState state, int roundCount)
+    public static IntentForecast Build(CombatState state, int roundCount, bool probabilityBranches = false)
     {
         List<Creature> enemies = state.Enemies.Where(enemy => enemy.Monster != null).ToList();
         List<Cursor> cursors = enemies.Select(enemy => new Cursor(enemy.Monster!)).ToList();
-        Rng rng = new(state.RunState.Rng.MonsterAi.ToSerializable());
+        // 概率分支模式零原生随机数接触：不克隆原生 MonsterAi 流，随机分支按最高权重确定化；
+        // vanillaSignatureRng 仅供原版方法签名（条件/状态分支求值不消费随机数）。
+        Rng? rollRng = probabilityBranches ? null : new(state.RunState.Rng.MonsterAi.ToSerializable());
+        Rng vanillaSignatureRng = rollRng ?? new Rng(0UL);
         List<IReadOnlyList<ForecastMove>> rounds = [];
         bool unsupported = false;
         bool exact = true;
         HashSet<string> unsupportedDetails = new(StringComparer.Ordinal);
         HashSet<string> approximationDetails = new(StringComparer.Ordinal);
-        List<int> monsterAiCounters = [rng.ToSerializable().counter];
+        List<int> monsterAiCounters = [rollRng != null ? rollRng.ToSerializable().counter : 0];
 
         for (int round = 0; round < roundCount; round++)
         {
@@ -110,9 +113,9 @@ internal static class IntentForecaster
                     cursor.Active = false;
                     continue;
                 }
-                cursor.Current = RollNext(cursor, rng, ref exact, approximationDetails);
+                cursor.Current = RollNext(cursor, rollRng, vanillaSignatureRng, ref exact, approximationDetails);
             }
-            monsterAiCounters.Add(rng.ToSerializable().counter);
+            monsterAiCounters.Add(rollRng != null ? rollRng.ToSerializable().counter : 0);
         }
 
         return new IntentForecast
@@ -284,7 +287,8 @@ internal static class IntentForecaster
 
     private static MoveState RollNext(
         Cursor cursor,
-        Rng rng,
+        Rng? rollRng,
+        Rng vanillaSignatureRng,
         ref bool exact,
         ISet<string> approximationDetails)
     {
@@ -314,21 +318,34 @@ internal static class IntentForecaster
                     cursor.Log.Add(move.Id);
                     return move;
                 case RandomBranchState random:
+                    if (rollRng == null)
+                    {
+                        // 概率分支模式：不读原生流，随机分支按最高权重确定化（近似预报）。
+                        IReadOnlyList<(string StateId, float Weight)> candidates =
+                            MonsterRandomBranchResolver.Enumerate(machine, random, cursor.Log);
+                        exact = false;
+                        approximationDetails.Add(
+                            $"{cursor.Monster.Id.Entry}.{random.Id}:概率分支最高权重");
+                        state = machine.States[candidates
+                            .OrderByDescending(candidate => candidate.Weight)
+                            .First().StateId];
+                        break;
+                    }
                     state = machine.States[MonsterRandomBranchResolver.Pick(
                         machine,
                         random,
                         cursor.Log,
-                        rng)];
+                        rollRng)];
                     break;
                 case ConditionalBranchState conditional:
                     exact = false;
                     approximationDetails.Add($"{cursor.Monster.Id.Entry}.{conditional.Id}:条件分支");
-                    state = machine.States[conditional.GetNextState(cursor.Monster.Creature, rng)];
+                    state = machine.States[conditional.GetNextState(cursor.Monster.Creature, vanillaSignatureRng)];
                     break;
                 default:
                     exact = false;
                     approximationDetails.Add($"{cursor.Monster.Id.Entry}.{state.Id}:状态分支");
-                    state = machine.States[state.GetNextState(cursor.Monster.Creature, rng)];
+                    state = machine.States[state.GetNextState(cursor.Monster.Creature, vanillaSignatureRng)];
                     break;
             }
         }
