@@ -4,8 +4,9 @@
   "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
   "seed": "blind-random-effects-20260929",
   "enemyCurrentHp": 30,
+  "clearRunDeck": true,
   "relics": [{ "relicId": "BIG_HAT" }],
   "cards": [
-    
+    { "cardId": "DEFEND_NECROBINDER", "pile": "Draw", "count": 5 }
   ]
 }
