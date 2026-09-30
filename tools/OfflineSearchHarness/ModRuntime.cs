@@ -594,9 +594,12 @@ internal static class ModRuntime
         {
             timeBoundary = blindResult.Samples.Any(sample => sample.BoundaryReason == SearchBoundaryReason.TimeLimit)
                 || blindResult.Evaluations.Any(sample => sample.BoundaryReason == SearchBoundaryReason.TimeLimit);
-            ContinuationStamp liveAfter = ContinuationStamp.CaptureLive(state);
+            // 概率分支模式：根 stamp 无 RNG 段，隔离校验也在无 RNG 段的口径上进行
+            // （模式不追踪原生随机数状态，其余字段照常检测活体变异）。
+            bool includeRng = !probabilityBranches;
+            ContinuationStamp liveAfter = ContinuationStamp.CaptureLive(state, includeRng);
             ContinuationStamp rootAfter = ContinuationStamp.CapturePredicted(root.PlayerIdentity,
-                root.ForkSimulator(), root.StartTurnNumber, root.Forecast, root.StartTurnNumber);
+                root.ForkSimulator(), root.StartTurnNumber, root.Forecast, root.StartTurnNumber, includeRng);
             if (liveAfter != root.ContinuationStamp || rootAfter != root.ContinuationStamp)
                 throw new InvalidOperationException("Blind search changed the live state or frozen root.");
         }
