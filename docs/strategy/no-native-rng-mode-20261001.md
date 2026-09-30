@@ -49,7 +49,7 @@
    - 药水池（~30）：大候选集——ε 剪枝的主要场景。
 4. **洗牌（片 3）**：不可枚举——显式边界（洗后牌序未知启发式），由每命令重观察吸收；`BuildProjectedShuffleOrder` 评估投影退役。
 
-## 已完成：运行时部署集成（提交 f08285d）\n\n部署会话过滤 MonsterBranch 决议（预测内部：原生自行掷骰，下一次搜索重观察真实分支）——两个部署选择装配点（动作附带与结束回合专用）均已处理，构建+门禁绿。\n\n## 后续批次
+## 已完成：设置开关与运行时集成（提交 42fbf88/f08285d）\n\n部署会话过滤 MonsterBranch 决议（预测内部：原生自行掷骰，下一次搜索重观察真实分支）——两个部署选择装配点（动作附带与结束回合专用）均已处理，构建+门禁绿。\n\n## 验证检查点（2026-10-01）\n\n全量回归：policy 45 场景、审计套件（discovery 26/attack-potion 35/ai-counter 6/initial-relic 6/delayed 17/nested 26）、合同 121 项全 Passed；门禁 REFACTOR_BOUNDARIES_OK；模式在线循环 8 决策零接触证据；Mod 已同源码部署（哈希校验）。\n\n## 后续批次
 
 - 批次 2：beam 接入概率权重（token.Title 解析或层携带）；聚合 = Σ(概率×终局值)，排序 = 胜利概率（含裁剪质量下界）→ 期望战损；ε/分支上限进策略。
 - 批次 3：零原生 RNG 接触（根捕获去 ToSerializable、stamp 去 `;R=`、状态键/缓存键去 RNG、IntentForecaster 去 live 克隆改权重枚举、NativeChoiceRuntime:290 计数日志省略）+ SolverController 逐命令在线循环 + UI 决策摘要（= 工作单 4.5）。
