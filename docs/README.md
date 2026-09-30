@@ -24,6 +24,7 @@
 
 | 要查什么 | 入口 |
 |---|---|
+| 0.47.3：终局战自动无视卡遗物、卡成长 | [0.47.3 更新日志](releases/0.47.3-RELEASE_NOTES.md) |
 | 0.47.2：跨回合路线、战前预报、模组兼容与内存显示 | [0.47.2 更新日志](releases/0.47.2-RELEASE_NOTES.md) |
 | 0.47.1 紧急回归修复 | [0.47.1 更新日志](releases/0.47.1-RELEASE_NOTES.md) |
 | 0.47.0 策略优化 Part 1 | [0.47.0 更新日志](releases/0.47.0-RELEASE_NOTES.md) |
