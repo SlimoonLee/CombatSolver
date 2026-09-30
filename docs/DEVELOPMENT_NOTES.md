@@ -2,6 +2,7 @@
 
 ## 未知 RNG CombatSolver（开发中，2026-09-28）
 
+- 2026-10-01 低语耳环工作项复核关闭：第一回合自动出牌引擎与原生差分早已验收（`INITIAL-NATIVE-START-EFFECTS-400/401` 七件首回合遗物同场 + 高密度生存者 Vakuu 连续嵌套选牌、`MULTICORE-EARRING-NESTED-CHOICE-DOP2`，runId 见 TEST_MATRIX）；AnyAlly 多人目标按单人硬约束保持边界——镜像直接调用原版 `Rng.NextItem`（同类型换态），单人下盟友空集返回 null 且不消耗 CombatTargets RNG，按构造一致。**登记既有问题**：`-VerifyForkBoundaries` 套件在 `AssertEndTurnPowerChoiceSuspends`（地狱人回合结束 Power 产生挂起选择未暂停 Power 阶段）失败，`fcb6d50` 与 `a4b58d0` 两处基线均复现，先于本轮全部工作，非本批回归；套件其余断言被此失败遮蔽，待独立排期修复。
 - 2026-10-01 随机怪物同族扩展全量验收：21 个随机分支怪物 + 6 个效果随机怪物全部经 MonsterMoveChecks 严格差分通过（25 条新检查，夹具 `monster-moves-random-expansion-a..f.json`），**零镜像缺口**——既有 BranchMonsterAi/MonsterMoveEffects 镜像覆盖全部来源，行为源码零改动。塞牌三源（Noisebot/SoulFysh/TheInsatiable，Shuffle 流）与结实的卵（ToughEgg HATCH，Niche 流孵化生命）均直接注入宿主即通过，无需召唤链。教训：①条件分支怪（外骨骼按槽位、组装师）不能裸注入（初始滚动无合法后继），须走自然遭遇；②蜈蚣段需具体段类名；③DISINTEGRATE 是攻击招不适用零掉血预期；④无头宿主快照枚举整个游戏目录，陈旧 `.combatsolver-precombat/process-*` 快照（150 个/约 15GB）与 worker GC 竞态会打断快照——运行前清理；⑤连续运行须等上一实例进程退出（否则"准入超时"或"启动的不是实例私有游戏"）。清单与教训见[随机怪物来源清单](strategy/blind-rng-monsters-20260929.md)。
 
 - 2026-10-01 架构 4.4（硬预算与截断偏差）量化完成（行为零改动）：qstats 双敌 60/60 夹具三 seed B=3000ms 对照 8B=24000ms（无截断参照）——B 下选择密集候选（DISCOVERY，每动作烧 options×seeds 次内层搜索）只走 1–3 动作而简单候选走 2–9（等时间≠等深度），全部分数为浅层叶子启发式且带宽 <5%；**同配置重复运行选中即翻转**（噪声主导，单次选中对比不构成证据），8B 参照下全体满深度、带宽 0.61–1.68M。尝试过选择密度加权分摊（权重 2，总和不变），18 轮噪声感知对照显示与基线无差异，未采纳、行为保持不变。报告见[预算偏差](strategy/blind-budget-bias-20261001.md)，分析器 `tools/analyze-budget-bias.ps1`。**流程教训**：一次构建失败被 `tail -1` 掩盖，导致一轮实验跑了旧 DLL 得出假阳性差异——构建验证必须看"已成功/0 错误"行而非耗时；之后真值实验前先做同配置重复运行测噪声。
