@@ -1,0 +1,44 @@
+# 无原生随机数模式：概率边界 + 短步多次决策（实施中，2026-10-01）
+
+目标：求解器零读零写原生随机数流。操作经原版队列消耗 RNG（游戏自身行为）；求解器只观察操作后的真实状态用于后续决策。影子世界的随机效果**不掷骰**——显式携带概率（分支枚举+权重），搜索携带概率边界（剪枝记录被裁剪概率质量），承诺步长 1 条命令（部署后重观察再决策），评估视野到战斗结束（反无限防守：终局项统治 + EnemyHp 进度 3:1 偏向 + 卖血定价，全部沿用现行 `SolverWeights` 语义——参考依据见会话设计记录）。
+
+与现有确定性/盲模式并存，`SearchPolicySnapshot.ProbabilityBranches` 开关（默认关）；离线宿主用 `OFFLINE_HARNESS_PROBABILITY_BRANCHES=1`。
+
+## 已完成：批次 1 片 1（提交 `19bc6a0`）
+
+怪物随机分支概率化，端到端复用知识恶魔诅咒通道模式：
+
+- `MonsterRandomBranchResolver.Enumerate`（纯函数：候选×权重，与 Pick 共享 RepeatWeight×基础权重×动态回调；Pick 语义未变）；
+- `MonsterBranchResolutionSupport`（SourceId=`MONSTER_BRANCH:{combatId}:{branchId}`；ResolvePinned 从计划列表读钉扎；RaisePending 挂起需求）；
+- `SimulatedCombatState.MonsterBranch.cs`（PendingMonsterBranchDemand 挂起通道；HasPendingChoice/Fork/两处执行捕获守卫集成）；
+- `BranchMonsterAi.AdvanceWithBranchPlan`（概率模式推进：钉扎→强制生效；无钉扎→挂起需求+返回 null；全程不消耗 MonsterAi 流）；
+- 线程化 `PrepareMonsterMovesForNextRound(..., plannedChoices, probabilityBranches)`；`AdvanceRound` 概率模式传 `turnStartChoices` 并在挂起时返回 PendingChoice；
+- 分支层 `BuildPendingChoiceReplayLayer` 新案例（每候选一条分支，归一化权重进 token.Title 供批次 2 聚合）；预算种子（语义宽度=候选数）；5 处 cursor 过滤点加 MonsterBranch；
+- 策略位 `ProbabilityBranches` + 求解器字段 + harness 环境变量覆盖。
+
+**验证**：概率模式 ON 扇出生效（雾菇遭遇 703 转移 vs OFF 560，双方均找到胜利线）；确定性回归绿（雾菇差分 + 扩展批次 A 7/7）。冒烟夹具 `prob-branch-smoke.json`。
+
+## 待实施：批次 1 片 2 —— mid-execution 随机结果原语（设计已定，未编码）
+
+逐流迁移（随机目标/生成族/球/费用/药水/选牌/Niche）的难点：这些消费点在**卡牌执行事务内部**（OnPlay 效果深处），不像怪物分支在回合边界。设计结论：
+
+1. **原语**：引擎新增通用 `RandomOutcomeSupport.Resolve(simulator, combat, key, candidates×weights, plannedResolutions)`：
+   - 概率模式：先查已计划决议（nested/turn-start 计划列表中的 `PlanChoiceEffect.RandomOutcome` 项，SourceId=key）；无则 `SetPendingRandomOutcome`（或复用 TurnStartChoiceRequest+新 Effect 值）→ 执行挂起 → PendingChoice 边界 → 分支层每候选一条分支 → 重放时强制生效。
+   - 确定性模式：照旧掷流（不迁移的流走影子自造种子，批次 3 前影子流仍在）。
+2. **挂起/恢复**：mid-execution 挂起需要执行续接帧（参照 `CardSelectionExecutionFrame` + `ResolveActionCardChoice` 的 Set/Append 双路径——已有 pending 时 `AppendExecutionContinuation`）。随机结果的恢复帧 = "应用被选中的结果"（按 key 注册 applier，参照 ModDefined 模式）。
+3. **逐流要点**：
+   - 随机目标（CombatTargets，~17 处）：候选=HittableEnemies（1–4 个）；多段随机目标（弹跳药瓶）逐击分支会爆炸——候选为"目标序列"或聚合为期望伤害（概率边界的合法形式：全质量聚合）。
+   - 生成族（CombatCardGeneration，~31 处但汇聚于 `CombatCardGenerationExtensions` 6 个内部消耗点）：候选=根池快照枚举；发现族生成后还有玩家选择（已分支化），只需分支"池抽取"。
+   - 球（3 类）/费用（0–3）/孵化（[min,max]）/选牌（可见堆枚举）：小候选集直接枚举。
+   - 药水池（~30）：大候选集——ε 剪枝的主要场景。
+4. **洗牌（片 3）**：不可枚举——显式边界（洗后牌序未知启发式），由每命令重观察吸收；`BuildProjectedShuffleOrder` 评估投影退役。
+
+## 后续批次
+
+- 批次 2：beam 接入概率权重（token.Title 解析或层携带）；聚合 = Σ(概率×终局值)，排序 = 胜利概率（含裁剪质量下界）→ 期望战损；ε/分支上限进策略。
+- 批次 3：零原生 RNG 接触（根捕获去 ToSerializable、stamp 去 `;R=`、状态键/缓存键去 RNG、IntentForecaster 去 live 克隆改权重枚举、NativeChoiceRuntime:290 计数日志省略）+ SolverController 逐命令在线循环 + UI 决策摘要（= 工作单 4.5）。
+- 批次 4：零接触合同（九流计数不变/无 `;R=`/无 live 读）、qstats A/B（防守倾向 vs 输出倾向场景，验证无防御死锁）、既有模式回归、文档、部署。
+
+## 边界与不做
+
+诊断/取证（bug 报告 RNG 序列化）保留不参与决策；旧模式退役另行决策；可见 Steam 验收/版本提升/发包不做。
