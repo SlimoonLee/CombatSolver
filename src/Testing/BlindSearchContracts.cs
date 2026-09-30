@@ -100,10 +100,10 @@ internal static class BlindSearchContracts
         PlanCardChoice choice = new(PlanChoiceEffect.GenerateToHand, PileType.None,
             [new("SAMPLE_ONLY", 0, "sample", 0, 0, "sample")]);
         PlanAction withChoice = new(PlanActionKind.PlayCard, root.StartTurnNumber,
-            CardId: "DRAW", Choice: choice, TurnStartChoices: [choice]);
+            CardId: "DRAW", Choice: choice, NestedChoices: [choice], TurnStartChoices: [choice]);
         PlanAction command = BlindCombatCommand.From(withChoice);
         Check(command.Choice == null && command.NestedChoices == null && command.TurnStartChoices == null,
-            "sample choices never exported");
+            "sample choices never exported, including nested layers");
         Check(BlindCombatCommand.Matches(command, withChoice), "initial command does not fix future choices");
         PlanAction endTurn = new(PlanActionKind.EndTurn, root.StartTurnNumber);
         Check(BlindCombatCommand.Matches(endTurn, BlindCombatCommand.From(endTurn)), "end turn command");

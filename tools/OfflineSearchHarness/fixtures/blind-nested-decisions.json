@@ -1,0 +1,16 @@
+{
+  "scenarioId": "BLIND-NESTED-DECISIONS-POLICY",
+  "characterId": "REGENT",
+  "encounterId": "FUZZY_WURM_CRAWLER_WEAK",
+  "seed": "blind-random-effects-20260929",
+  "enemyCurrentHp": 6,
+  "initialPlayerStars": 6,
+  "clearPlayerPiles": true,
+  "cards": [
+    { "cardId": "DECISIONS_DECISIONS", "pile": "Hand" },
+    { "cardId": "DISCOVERY", "pile": "Hand" },
+    { "cardId": "DISCOVERY", "pile": "Hand" },
+    { "cardId": "STRIKE_REGENT", "pile": "Hand", "count": 2 },
+    { "cardId": "STRIKE_REGENT", "pile": "Draw", "count": 6 }
+  ]
+}

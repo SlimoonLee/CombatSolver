@@ -1,5 +1,6 @@
 using CombatSolver;
 using CombatSolver.Engine.Common;
+using CombatSolver.Engine.InCombat.Simulation;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -26,18 +27,20 @@ internal static class BlindNativeChoices
             CardChoiceSpec? template = null;
             if (command.Kind == PlanActionKind.PlayCard)
             {
-                var simulator = before.ForkForSample(options.BlindSeed).ForkSimulator();
-                var card = CombatBeamSolver.FindCardForReplay(simulator.State.GetPlayerCombatState(player).Hand.Cards, command)
+                // Transient synchronous probe for the command's own choice spec; the forked graph
+                // stays strictly local and unreachable once the template is captured.
+                CombatPredictionSimulator probe = before.ForkForSample(options.BlindSeed).ForkSimulator();
+                var card = CombatBeamSolver.FindCardForReplay(probe.State.GetPlayerCombatState(player).Hand.Cards, command)
                     ?? throw new InvalidOperationException("Native blind choice source card is missing.");
-                template = CardChoiceSupport.GetSpec(simulator, card);
+                template = CardChoiceSupport.GetSpec(probe, card);
                 if (template == null && card.Preview is Abundance or Discovery or Quasar or Splash)
                     template = new(PlanChoiceEffect.GenerateToHand, PileType.None, 0, 1, [], [], 0);
             }
-            int calls = 0;
+            // Every native screen of this command is answered by the same observed source
+            // definition: the primary choice and nested screens raised during its resolution
+            // (auto-played generations, repeat selections) each resolve against the live options.
             selector.CombatSelector = (cards, min, max) =>
             {
-                if (++calls > 1)
-                    throw new NotSupportedException("Blind native selection needs a source for this nested choice.");
                 if (potion != null && PotionChoiceContinuation.Supports(potion))
                 {
                     if (PotionChoiceSupport.GeneratesCardChoice(potion) && (min > 1 || max != 1))

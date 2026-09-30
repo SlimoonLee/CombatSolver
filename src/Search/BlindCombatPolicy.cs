@@ -14,7 +14,11 @@ internal sealed record BlindPotionChoiceResult(string SourceId, PlanCardChoice S
     IReadOnlyList<BlindPotionOptionValue> Options);
 
 internal sealed record BlindCardChoiceResult(string SourceId, PlanCardChoice Selected,
-    IReadOnlyList<BlindPotionOptionValue> Options);
+    IReadOnlyList<BlindPotionOptionValue> Options)
+{
+    /// <summary>1-based scoring order among this command's choice layers; nested commands record one entry per layer.</summary>
+    public int Layer { get; init; } = 1;
+}
 
 /// <summary>
 /// A bounded executable continuation policy. Its decision samples never inherit the trajectory's
@@ -221,83 +225,113 @@ internal sealed class BlindContinuationPolicy(
     }
 
     /// <summary>
-    /// Replays one command; when its execution surfaces a card choice with multiple recorded
+    /// Replays one command; when its execution surfaces card choices with multiple recorded
     /// candidates (Discovery family, Seeker Strike), the same command is re-replayed from the same
     /// pre-command state once per candidate — deterministic apart from the choice — and each
-    /// continuation is scored with independent inner searches. The best candidate's post-state
+    /// continuation is scored with independent inner searches. Commands that raise several such
+    /// choices (nested generations, auto-played choices) are scored depth-first: every layer is
+    /// evaluated under the already-pinned outer layers while deeper requests resolve through the
+    /// automatic policy, so a layer's score isolates its own effect. The best candidate's post-state
     /// continues the trajectory; per-option scores are recorded as
     /// independent_determinized_choice_proposal, same as potion options.
     /// </summary>
     private SimulationSnapshot ReplayCardChoiceAware(CombatBeamSolver driver, CombatRootSnapshot trajectory,
         SimulationSnapshot state, PlanAction command, List<BlindCardChoiceResult> cardChoices)
     {
-        TurnStartChoiceRequest? observed = null;
+        // The first pass observes every request in arrival order; deterministic replays raise them
+        // in the same order, so scored layers are addressed by ordinal.
+        List<TurnStartChoiceRequest> requests = [];
         SimulationSnapshot firstPass = driver.ReplayBlindCommand(state, command, request =>
         {
-            observed = request;
+            requests.Add(request);
             return ObserveChoice(request);
         });
-        CardChoiceSpec? spec = observed?.Spec;
-        if (spec == null || spec.Options.Count <= 1)
+        List<int> scoringLayers = Enumerable.Range(0, requests.Count)
+            .Where(ordinal => requests[ordinal].Spec is { Options.Count: > 1 })
+            .ToList();
+        if (scoringLayers.Count == 0)
             return firstPass;
 
         CombatRootSnapshot preCommandRoot = trajectory.ObservePrediction(state.Simulator);
-        var evaluated = new List<(PlanCardChoice Choice, double Score, int Victories)>();
-        int bestIndex = 0;
-        double bestScore = double.NegativeInfinity;
-        for (int index = 0; index < spec.Options.Count; index++)
+        Dictionary<int, int> pinned = [];
+        foreach (int layer in scoringLayers)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            PlanCardChoice forced = CardChoiceSupport.BuildRequestedChoiceAt(spec, index);
-            double score = 0;
-            int victories = 0;
-            foreach (ulong seed in _decisionSeeds)
+            CardChoiceSpec spec = requests[layer].Spec!;
+            var evaluated = new List<(PlanCardChoice Choice, double Score, int Victories)>();
+            int bestIndex = 0;
+            double bestScore = double.NegativeInfinity;
+            for (int index = 0; index < spec.Options.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CombatRootSnapshot sample = preCommandRoot.ForkForSample(seed);
-                CombatBeamSolver seedDriver = new(sample, names, damage, DecisionPolicy, cancellationToken,
-                    searchProfile: DecisionPolicy.Profile);
-                SimulationSnapshot before = seedDriver.ObserveBlindState();
-                SimulationSnapshot? after = null;
-                try
+                PlanCardChoice forced = CardChoiceSupport.BuildRequestedChoiceAt(spec, index);
+                double score = 0;
+                int victories = 0;
+                Dictionary<int, int> layerPins = new(pinned) { [layer] = index };
+                foreach (ulong seed in _decisionSeeds)
                 {
-                    after = seedDriver.ReplayBlindCommand(before, command,
-                        request => request.Spec == null
-                            ? ObserveChoice(request)
-                            : CardChoiceSupport.BuildRequestedChoiceAt(request.Spec, index));
-                    CombatRootSnapshot continuation = sample.ObservePrediction(after.Simulator);
-                    SolverResult result = SolveDecision(continuation, DecisionPolicy);
-                    recordWork(result);
-                    recordTransitions?.Invoke(1);
-                    score += result.BestNode.Score;
-                    if (result.Snapshot.AllEnemiesDead && !result.Snapshot.PlayerDead
-                        && result.BoundaryReason == SearchBoundaryReason.None && !result.Snapshot.HasRisk)
-                        victories++;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    CombatRootSnapshot sample = preCommandRoot.ForkForSample(seed);
+                    CombatBeamSolver seedDriver = new(sample, names, damage, DecisionPolicy, cancellationToken,
+                        searchProfile: DecisionPolicy.Profile);
+                    SimulationSnapshot before = seedDriver.ObserveBlindState();
+                    SimulationSnapshot? after = null;
+                    try
+                    {
+                        after = ReplayPinnedCommand(seedDriver, before, command, layerPins);
+                        CombatRootSnapshot continuation = sample.ObservePrediction(after.Simulator);
+                        SolverResult result = SolveDecision(continuation, DecisionPolicy);
+                        recordWork(result);
+                        recordTransitions?.Invoke(1);
+                        score += result.BestNode.Score;
+                        if (result.Snapshot.AllEnemiesDead && !result.Snapshot.PlayerDead
+                            && result.BoundaryReason == SearchBoundaryReason.None && !result.Snapshot.HasRisk)
+                            victories++;
+                    }
+                    finally
+                    {
+                        before.ReleaseSimulator();
+                        after?.ReleaseSimulator();
+                    }
                 }
-                finally
+                double mean = score / _decisionSeeds.Length;
+                evaluated.Add((forced, mean, victories));
+                if (mean > bestScore)
                 {
-                    before.ReleaseSimulator();
-                    after?.ReleaseSimulator();
+                    bestScore = mean;
+                    bestIndex = index;
                 }
             }
-            double mean = score / _decisionSeeds.Length;
-            evaluated.Add((forced, mean, victories));
-            if (mean > bestScore)
-            {
-                bestScore = mean;
-                bestIndex = index;
-            }
+            pinned[layer] = bestIndex;
+            cardChoices.Add(new BlindCardChoiceResult(requests[layer].SourceId,
+                evaluated[bestIndex].Choice with
+                {
+                    SourceId = requests[layer].SourceId,
+                    ContextId = requests[layer].ContextId,
+                    Timing = requests[layer].Timing,
+                },
+                evaluated.Select(item => new BlindPotionOptionValue(item.Choice, item.Score,
+                    item.Victories / (double)_decisionSeeds.Length, 0)).ToArray())
+            { Layer = cardChoices.Count + 1 });
         }
+        return ReplayPinnedCommand(driver, state, command, pinned);
+    }
 
-        SimulationSnapshot chosen = driver.ReplayBlindCommand(state, command,
-            request => request.Spec == null
-                ? ObserveChoice(request)
-                : CardChoiceSupport.BuildRequestedChoiceAt(request.Spec, bestIndex));
-        cardChoices.Add(new BlindCardChoiceResult(command.CardId ?? command.PotionId ?? "choice",
-            evaluated[bestIndex].Choice,
-            evaluated.Select(item => new BlindPotionOptionValue(item.Choice, item.Score,
-                item.Victories / (double)_decisionSeeds.Length, 0)).ToArray()));
-        return chosen;
+    /// <summary>
+    /// Pins scored layers by request ordinal; every other request keeps the automatic policy.
+    /// A pin is a position proposal: per-seed draws can change how many candidates a later
+    /// request presents, so the index clamps to the options this replay actually raised.
+    /// </summary>
+    private SimulationSnapshot ReplayPinnedCommand(CombatBeamSolver driver, SimulationSnapshot before,
+        PlanAction command, IReadOnlyDictionary<int, int> pins)
+    {
+        int ordinal = 0;
+        return driver.ReplayBlindCommand(before, command, request =>
+        {
+            int current = ordinal++;
+            if (pins.TryGetValue(current, out int index) && request.Spec is { Options.Count: > 0 } spec)
+                return CardChoiceSupport.BuildRequestedChoiceAt(spec, Math.Min(index, spec.Options.Count - 1));
+            return ObserveChoice(request);
+        });
     }
 
     private double EvaluateLeaf(CombatRootSnapshot observation)

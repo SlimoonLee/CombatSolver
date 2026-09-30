@@ -100,6 +100,20 @@ internal static class BlindPolicyChecks
                 "certain immediate kill is retained instead of consuming that hand in Stoke");
             Check(lethal.MeanScore >= stoke.MeanScore, "Stoke includes the opportunity cost of the exhausted hand");
         }
+        else if (poolCardCommand != null && poolCardCommand.CardId == "DECISIONS_DECISIONS")
+        {
+            // Nested auto-played choices: the command's trajectory must score every layer (the
+            // hand skill choice plus each auto-played generation), not only the last request.
+            var nestedTrajectories = result.Evaluations
+                .Where(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)).ToArray();
+            Check(nestedTrajectories.Length > 0, "nested-choice command is evaluated on the full sample matrix");
+            Check(nestedTrajectories.Any(value => value.CardChoices.Count >= 2
+                    && value.CardChoices.Select(choice => choice.Layer)
+                        .SequenceEqual(Enumerable.Range(1, value.CardChoices.Count))),
+                "nested choice layers are scored depth-first and recorded in order");
+            Check(nestedTrajectories.Any(value => value.CardChoices.All(choice => choice.Options.Count >= 2)),
+                "every nested layer compares multiple recorded candidates");
+        }
         else if (poolCardCommand != null)
         {
             Check(result.Evaluations.Any(value => value.ActionKey == BlindCombatCommand.Key(poolCardCommand)),
@@ -257,6 +271,49 @@ internal static class BlindPolicyChecks
             evidence.Add(new { stage = "native_observed_selection", nativeOptions, nativeSelected,
                 predictedOptions = predictedChoiceOptions[0] });
         }
+        else if (poolCardCommand != null && poolCardCommand.CardId == "DECISIONS_DECISIONS")
+        {
+            // Native deployment answers every screen of the nested auto-play chain; the recorded
+            // selections must reconcile with a full prediction replay of the same command.
+            ObservedCardSelector selector = new("Blind");
+            using var selectScope = CardSelectCmd.PushSelector(selector, localOnly: true);
+            using var commandScope = BlindNativeChoices.Bind(selector, live, poolCardCommand,
+                options with { BlindSamples = 3 }, loop, CancellationToken.None);
+            GameAction action = CombatRollout.CreateAction(live, root.PlayerIdentity, poolCardCommand);
+            RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(action);
+            loop.RunUntilCompleted(action.CompletionTask, TimeSpan.FromSeconds(60), "blind native nested auto-play chain");
+            if (action.Exception != null) throw action.Exception;
+            List<string[]> recorded = selector.Choices.Select(item => JsonSerializer.SerializeToElement(item, Program.Json))
+                .Select(entry => entry.GetProperty("selected").EnumerateArray()
+                    .Select(key => key.GetString() ?? "").ToArray()).ToList();
+            Check(recorded.Count >= 2 && recorded.All(keys => keys.Length == 1),
+                "nested native chain opens one single-select screen per choice layer");
+            int nativeOrdinal = 0;
+            SimulationSnapshot expected = new CombatBeamSolver(root, names, damage, policy)
+                .ReplayBlindAuditForTesting([poolCardCommand], request =>
+                {
+                    if (request.Spec == null) return null;
+                    string[] keys = recorded[nativeOrdinal++];
+                    int optionIndex = request.Spec.Options.Select(CardChoiceSupport.ChoiceCardKey)
+                        .ToList().FindIndex(key => key == keys[0]);
+                    if (optionIndex < 0)
+                        throw new InvalidOperationException("原生嵌套选择不在预测候选中。");
+                    return CardChoiceSupport.BuildRequestedChoiceAt(request.Spec, optionIndex) with
+                    {
+                        SourceId = request.SourceId,
+                        ContextId = request.ContextId,
+                        Timing = request.Timing,
+                    };
+                });
+            try
+            {
+                Check(ContinuationStamp.CapturePredicted(root.PlayerIdentity, expected.Simulator, expected.Turn,
+                        root.Forecast, root.StartTurnNumber) == ContinuationStamp.CaptureLive(live),
+                    "native nested selections, auto-play chain, piles and RNG match full prediction");
+            }
+            finally { expected.ReleaseSimulator(); }
+            evidence.Add(new { stage = "native_nested_selection", screens = recorded });
+        }
         File.WriteAllText(Path.Combine(options.OutputDirectory, "blind-policy-checks.json"),
             JsonSerializer.Serialize(new { status = "Passed", checks, independentPolicySearchRuns = workRuns, evidence }, Program.Json));
         return $"checks={checks} Passed";
@@ -272,7 +329,8 @@ internal static class BlindPolicyChecks
                 or "BUNDLE_OF_JOY" or "METAMORPHOSIS"
                 or "DISCOVERY" or "ABUNDANCE" or "QUASAR" or "SPLASH"
                 or "JACKPOT" or "MANIFEST_AUTHORITY" or "MAD_SCIENCE"
-                or "SEEKER_STRIKE" or "UPROAR" or "CATASTROPHE" or "REBOOT");
+                or "SEEKER_STRIKE" or "UPROAR" or "CATASTROPHE" or "REBOOT"
+                or "DECISIONS_DECISIONS");
         if (poolCardId == null) return null;
         var card = hand.Single(c => c.Preview.Id.Entry == poolCardId);
         var target = card.Preview.TargetType == TargetType.AnyEnemy ? root.Enemies[0] : null;

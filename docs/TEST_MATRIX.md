@@ -1,5 +1,15 @@
 # CombatSolver 测试清单
 
+## 复杂嵌套选择逐层评分（2026-10-01，架构 4.3）
+blind 轨迹对一条命令产生的多层选择深度优先逐层评分，逐层分数入 `CardChoices`（Layer 序号）；harness 原生侧每屏按已登记来源应答（移除第二次选择显式停止）。夹具 DECISIONS_DECISIONS（抽 3→选技能→自动打出 3 次→生成选择嵌套，REGENT+`initialPlayerStars:6`）。
+| 场景 | 结果 |
+|---|---|
+| policy blind-nested-decisions（含逐层断言+原生逐屏对账） | Passed 12 项 |
+| audit blind-nested-decisions-audit（effects 全对账） | Passed 26 项 |
+| 合同（含嵌套剥离） | Passed 121 项 |
+| 回归 policy 45 场景 / discovery 26 / attack-potion 35 / ai-counter 6 / initial-relic 6+6 / delayed 17 | 全 Passed |
+| 门禁 | REFACTOR_BOUNDARIES_OK search_files=241 |
+
 ## KD 计划选择接入 EndTurn 回放（2026-10-01，架构 4.3 前置项）
 ai-counter 审计恢复全量两回合 Stamp 对账:EndTurn 携带 `ApplyKnowledgeCurse` 计划选择,`Resolve` 在敌人回合从原始计划列表消费;顺带修复 4.1 重建差一(StateLog 末位待执行招不计数,详见白名单文档勘误)。
 | 场景 | 结果 |
