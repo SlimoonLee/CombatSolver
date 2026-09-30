@@ -41,7 +41,7 @@
 1. **原语**：引擎新增通用 `RandomOutcomeSupport.Resolve(simulator, combat, key, candidates×weights, plannedResolutions)`：
    - 概率模式：先查已计划决议（nested/turn-start 计划列表中的 `PlanChoiceEffect.RandomOutcome` 项，SourceId=key）；无则 `SetPendingRandomOutcome`（或复用 TurnStartChoiceRequest+新 Effect 值）→ 执行挂起 → PendingChoice 边界 → 分支层每候选一条分支 → 重放时强制生效。
    - 确定性模式：照旧掷流（不迁移的流走影子自造种子，批次 3 前影子流仍在）。
-2. **挂起/恢复**：mid-execution 挂起需要执行续接帧（参照 `CardSelectionExecutionFrame` + `ResolveActionCardChoice` 的 Set/Append 双路径——已有 pending 时 `AppendExecutionContinuation`）。随机结果的恢复帧 = "应用被选中的结果"（按 key 注册 applier，参照 ModDefined 模式）。
+2. **挂起/恢复（帧机制研究结论，2026-10-01）**：`ICombatPredictionExecutionFrame` 的模式是 `Resume(simulator)` **重新进入同一点的决议函数**——`CardSelectionExecutionFrame.Resume` 重调 `ResolveActionCardChoice`（重放携带计划选择时游标命中并 Apply），`TurnSelectionExecutionFrame.Resume` 重调 `ResolveCapturedChoice`。因此随机结果的帧 = `RandomOutcomeExecutionFrame(Key, 候选集)`，`Resume` 重调该消费点的决议 helper（带计划决议则确定性应用；再无决议则再挂起）。**每个效果需要自己的帧类型与阶段拆分**（如弹跳药瓶的"第 i 击"循环索引）——这正是历史"嵌套执行检查点"批次的工作形态，逐效果小批推进。
 3. **逐流要点**：
    - 随机目标（CombatTargets，~17 处）：候选=HittableEnemies（1–4 个）；多段随机目标（弹跳药瓶）逐击分支会爆炸——候选为"目标序列"或聚合为期望伤害（概率边界的合法形式：全质量聚合）。
    - 生成族（CombatCardGeneration，~31 处但汇聚于 `CombatCardGenerationExtensions` 6 个内部消耗点）：候选=根池快照枚举；发现族生成后还有玩家选择（已分支化），只需分支"池抽取"。
