@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
+using CombatSolver.Engine.Common;
 using CombatSolver.Engine.InCombat.Simulation;
+using MegaCrit.Sts2.Core.Entities.Cards;
 
 namespace CombatSolver;
 
@@ -239,13 +241,19 @@ internal sealed class BlindContinuationPolicy(
         SimulationSnapshot state, PlanAction command, List<BlindCardChoiceResult> cardChoices)
     {
         // The first pass observes every request in arrival order; deterministic replays raise them
-        // in the same order, so scored layers are addressed by ordinal.
+        // in the same order, so scored layers are addressed by ordinal. 概率分支模式下穿过怪物
+        // 随机分支（最高权重钉扎续行），每次重跑重收集请求列表。
         List<TurnStartChoiceRequest> requests = [];
-        SimulationSnapshot firstPass = driver.ReplayBlindCommand(state, command, request =>
-        {
-            requests.Add(request);
-            return ObserveChoice(request);
-        });
+        SimulationSnapshot firstPass = ReplayThroughMonsterBranches(driver, state, command,
+            attemptCommand =>
+            {
+                requests.Clear();
+                return driver.ReplayBlindCommandResolved(state, attemptCommand, request =>
+                {
+                    requests.Add(request);
+                    return ObserveChoice(request);
+                });
+            });
         List<int> scoringLayers = Enumerable.Range(0, requests.Count)
             .Where(ordinal => requests[ordinal].Spec is { Options.Count: > 1 })
             .ToList();
@@ -317,20 +325,56 @@ internal sealed class BlindContinuationPolicy(
     }
 
     /// <summary>
+    /// 概率分支模式：重放穿过怪物随机分支——每次挂起按最高权重候选钉扎后续行，非怪物分支
+    /// 挂起原样交回调用方。确定性模式该 helper 直通（无挂起时零额外重放）。
+    /// </summary>
+    private SimulationSnapshot ReplayThroughMonsterBranches(CombatBeamSolver driver, SimulationSnapshot before,
+        PlanAction command, Func<PlanAction, SimulationSnapshot> replayOnce)
+    {
+        List<PlanCardChoice> branchPins = [];
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            PlanAction attemptCommand = branchPins.Count == 0
+                ? command
+                : command with { TurnStartChoices = branchPins.ToArray() };
+            SimulationSnapshot next = replayOnce(attemptCommand);
+            if (next.BoundaryReason != SearchBoundaryReason.PendingChoice)
+                return next;
+            var simState = (SimulatedCombatState)next.Simulator.State.CombatState;
+            if (simState.PendingMonsterBranchDemand is not { } demand)
+                return next;
+            (string bestId, _) = demand.Candidates.MaxBy(candidate => candidate.Weight);
+            branchPins.Add(new PlanCardChoice(
+                PlanChoiceEffect.MonsterBranch,
+                PileType.None,
+                [new PlanCardToken(bestId, 0, string.Empty, 0, 0, string.Empty)],
+                MonsterBranchResolutionSupport.SourceId(demand.Owner, demand.BranchId),
+                Timing: PlanChoiceTiming.EnemyTurn));
+            next.ReleaseSimulator();
+        }
+        throw new InvalidOperationException("概率分支模式：怪物分支钉扎重放超出上限。");
+    }
+
+    /// <summary>
     /// Pins scored layers by request ordinal; every other request keeps the automatic policy.
     /// A pin is a position proposal: per-seed draws can change how many candidates a later
     /// request presents, so the index clamps to the options this replay actually raised.
+    /// 概率分支模式下重放穿过怪物随机分支：每次挂起按最高权重候选钉扎后续行（最可能怪物
+    /// 响应下的确定性延续；完整期望聚合属后续批次），非怪物分支挂起原样交回调用方。
     /// </summary>
     private SimulationSnapshot ReplayPinnedCommand(CombatBeamSolver driver, SimulationSnapshot before,
         PlanAction command, IReadOnlyDictionary<int, int> pins)
     {
-        int ordinal = 0;
-        return driver.ReplayBlindCommand(before, command, request =>
+        return ReplayThroughMonsterBranches(driver, before, command, attemptCommand =>
         {
-            int current = ordinal++;
-            if (pins.TryGetValue(current, out int index) && request.Spec is { Options.Count: > 0 } spec)
-                return CardChoiceSupport.BuildRequestedChoiceAt(spec, Math.Min(index, spec.Options.Count - 1));
-            return ObserveChoice(request);
+            int ordinal = 0;
+            return driver.ReplayBlindCommandResolved(before, attemptCommand, request =>
+            {
+                int current = ordinal++;
+                if (pins.TryGetValue(current, out int index) && request.Spec is { Options.Count: > 0 } spec)
+                    return CardChoiceSupport.BuildRequestedChoiceAt(spec, Math.Min(index, spec.Options.Count - 1));
+                return ObserveChoice(request);
+            });
         });
     }
 

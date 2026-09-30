@@ -28,6 +28,15 @@ internal sealed partial class CombatBeamSolver
         => Replay([BlindCombatCommand.From(command)], parent, parent.Turn,
             observedChoicePolicy: observedChoicePolicy, allowExecutionCapture: false);
 
+    /// <summary>
+    /// 概率分支模式重放：保留原始动作的计划选择（如 MonsterBranch 钉扎），不经
+    /// <see cref="BlindCombatCommand.From"/> 的样本剥离；决议仍由观测策略游标承担。
+    /// </summary>
+    internal SimulationSnapshot ReplayBlindCommandResolved(SimulationSnapshot parent, PlanAction command,
+        Func<TurnStartChoiceRequest, PlanCardChoice?> observedChoicePolicy)
+        => Replay([command], parent, parent.Turn,
+            observedChoicePolicy: observedChoicePolicy, allowExecutionCapture: false);
+
     internal BlindPotionObservation PrepareBlindPotion(SimulationSnapshot parent, PlanAction command,
         Func<TurnStartChoiceRequest, PlanCardChoice?> observedChoicePolicy)
     {
