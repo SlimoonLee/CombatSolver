@@ -4,6 +4,12 @@
 
 与现有确定性/盲模式并存，`SearchPolicySnapshot.ProbabilityBranches` 开关（默认关）；离线宿主用 `OFFLINE_HARNESS_PROBABILITY_BRANCHES=1`。
 
+## 已完成：零接触在线循环（提交 `71fe6ca`）
+
+`--play-combat` 逐决策循环在概率模式下端到端运转：每决策 `RunSearchDetailed` 以零接触方式重捕获+搜索（含怪物分支扇出），部署聚合首命令，重观察再决策。**实证**：雾菇遭遇 8 决策全部 `native-rng-counters.json zeroContact=true`（逐决策目录独立证据），`rollout-summary.json reobserveAfterEveryCommand=true`。修复点：盲模式隔离校验在概率模式下改用无 RNG 段口径比对（模式不追踪原生随机数状态，其余字段照常检测活体变异）。
+
+当前行为注记：blind 轨迹重放在怪物随机分支处按边界停止并以叶子启发式计分（内层搜索树正常按概率分支展开）——即"随机分支=边界"与短步重观察组合的中间形态；批次 2 的概率聚合（轨迹内 Σ权重×分支值）是把中间形态升级为完整期望评估的剩余工作。
+
 ## 已完成：零原生 RNG 接触的根捕获（提交 `6c70f8a`）
 
 模式开启时根捕获**零读写** `RunState.Rng`：
