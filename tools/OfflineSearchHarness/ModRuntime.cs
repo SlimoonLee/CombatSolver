@@ -128,6 +128,10 @@ internal static class ModRuntime
             UseBeamWidthPortfolio = options.UsePortfolio,
             UseNoveltyPortfolio = options.AdaptiveNoveltyRefinement,
             StopAtAcceptableBattleHpLoss = options.StopAtZeroLoss,
+            RelicStrategyEnabled = options.MeatCounterTarget,
+            RelicCounterRules = options.MeatCounterTarget
+                ? [new RelicCounterRule(RelicCounterId.MeatOnTheBone, true, 1, 1, 0, 1)]
+                : [],
             OnlineStatisticsEnabled = false,
             SearchCompletionNotificationsEnabled = false,
             PotionPolicy = Enum.Parse<SolverPotionPolicy>(options.PotionPolicy, ignoreCase: true),
@@ -715,6 +719,7 @@ internal static class ModRuntime
             ["shufflesCrossed"] = result.Snapshot.ShufflesCrossed,
             ["score"] = result.BestNode.Score,
             ["projectedBattleHpLost"] = result.ProjectedBattleHpLost,
+            ["postCombatRelicHeal"] = result.PostCombatRelicHeal,
             ["potionCount"] = result.PotionCount,
             ["onlyDeathRoutes"] = result.OnlyDeathRoutesFound,
             ["finalHp"] = result.Snapshot.PlayerHp,

@@ -5,11 +5,22 @@ using System.Text.Json.Serialization;
 using CombatSolver;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Players;
 
 namespace OfflineSearchHarness;
 
 internal static class Program
 {
+    /// <summary>CLI 生成模式的诊断注入：遗物（带骨肉本体）与入场血量覆盖，先于根捕获生效。</summary>
+    private static async Task InjectDiagnosticStateAsync(CombatState combat, HarnessOptions options)
+    {
+        Player player = combat.Players.Single();
+        if (options.RelicOverride is { } relicId)
+            await UnattendedTestRunner.OfflineScenarioSession.InjectRelicAsync(player,
+                new UnattendedRelicInjection { RelicId = relicId });
+        if (options.PlayerHp is { } hp)
+            await CreatureCmd.SetCurrentHp(player.Creature, hp);
+    }
     internal static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
@@ -175,6 +186,12 @@ internal static class Program
                 Step(steps, "M1.2 推进到玩家第一回合", () =>
                 {
                     combat = OfflineCombat.WaitForPlayableCombat(loop, RequestTimeout(120));
+                    if (options.RelicOverride != null || options.PlayerHp != null)
+                    {
+                        CombatState injectedCombat = combat!;
+                        Task inject = InjectDiagnosticStateAsync(injectedCombat, options);
+                        loop.RunUntilCompleted(inject, RequestTimeout(30), "诊断状态注入");
+                    }
                     return OfflineCombat.DescribeRoot(combat);
                 });
             }
@@ -598,6 +615,12 @@ internal sealed record HarnessOptions
     public int? TranspositionEntryLimit { get; init; }
     public bool ProductionBudget { get; init; }
     public bool StopAtZeroLoss { get; init; }
+    /// <summary>诊断开关：启用带骨肉半血计数目标（游戏内由遗物策略面板配置，规则与生产一致：min=max=半血旗）。</summary>
+    public bool MeatCounterTarget { get; init; }
+    /// <summary>诊断开关：进战后把玩家当前生命覆盖为该值（先于根捕获，配合 --motb 复现半血线附近的取舍）。</summary>
+    public int? PlayerHp { get; init; }
+    /// <summary>诊断开关：进战后给玩家注入该遗物（配合 --motb 提供带骨肉本体）。</summary>
+    public string? RelicOverride { get; init; }
     public bool VerifyIncremental { get; init; }
     /// <summary>实验：走 Runtime 的搜索内 No-GC 生命周期，供无头宿主复现内存回收与截断。</summary>
     public bool EnableNoGcRegion { get; init; }
@@ -646,6 +669,9 @@ internal sealed record HarnessOptions
         string? rankingModelPath = null;
         bool continuousThreatRanking = false;
         bool baseScoreTacticalTies = false;
+        bool meatCounterTarget = false;
+        int? playerHpOverride = null;
+        string? relicOverride = null;
         bool adaptiveNoveltyRefinement = false;
         bool? reallocatedRefinementPortfolio = null;
         BeamWeightPerturbation? beamWeightPerturbation = null;
@@ -719,6 +745,9 @@ internal sealed record HarnessOptions
                 case "--state-key-salt": stateKeySalt = int.Parse(Value()); break;
                 case "--measure-phases": measurePhases = true; break;
                 case "--stop-at-zero-loss": stopAtZeroLoss = true; break;
+                case "--motb": meatCounterTarget = true; break;
+                case "--player-hp": playerHpOverride = int.Parse(Value()); break;
+                case "--relic": relicOverride = Value(); break;
                 case "--verify-incremental": verifyIncremental = true; break;
                 case "--production-budget": productionBudget = true; break;
                 case "--disable-transposition-prune": transpositionPruneOff = int.Parse(Value()); break;
@@ -884,6 +913,9 @@ internal sealed record HarnessOptions
             TranspositionEntryLimit = transpositionEntryLimit,
             ProductionBudget = productionBudget,
             StopAtZeroLoss = stopAtZeroLoss,
+            MeatCounterTarget = meatCounterTarget,
+            PlayerHp = playerHpOverride,
+            RelicOverride = relicOverride,
             VerifyIncremental = verifyIncremental,
             MemoryNoProgressRecoveryLimit = memoryNoProgressLimit,
             EnableNoGcRegion = enableNoGcRegion,
