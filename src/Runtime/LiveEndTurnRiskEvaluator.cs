@@ -37,7 +37,7 @@ internal static class LiveEndTurnRiskEvaluator
             .Where(choice => choice.Timing is PlanChoiceTiming.PlayerTurnEnd or PlanChoiceTiming.EnemyTurn)
             .ToArray() ?? [];
         PlanCardChoice[] cursorChoices = endTurnChoices
-            .Where(choice => choice.Effect != PlanChoiceEffect.ApplyKnowledgeCurse)
+            .Where(choice => choice.Effect is not (PlanChoiceEffect.ApplyKnowledgeCurse or PlanChoiceEffect.MonsterBranch))
             .ToArray();
         combat.BeginActionChoices(cursorChoices);
         combat.SetActionChoiceTiming(PlanChoiceTiming.PlayerTurnEnd);

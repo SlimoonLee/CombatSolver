@@ -39,7 +39,8 @@ internal sealed partial class SimulatedCombatState : ICombatPredictionExecutionC
     bool ICombatPredictionExecutionContinuationState.CanCaptureExecutionContinuation =>
         _activeActionChoices is null && _cardExecutionScopeDepth == 0 && _activeCardExecutionDeaths is null
         && PendingTurnStartChoice is { Spec: not null, Effect: not PlanChoiceEffect.ModDefined }
-        && PendingKnowledgeDemonChoice is null && !_playerTurnEndRequested
+        && PendingKnowledgeDemonChoice is null && PendingMonsterBranchDemand is null
+        && !_playerTurnEndRequested
         && _powerCardSources is not { Count: > 0 } && _pendingPowerAmountChanges is not { Count: > 0 }
         && _unsettlingLampTriggeringCards is not { Count: > 0 }
         && _unsettlingLampInternalPowerTypes is not { Count: > 0 };

@@ -34,6 +34,12 @@ internal enum PlanChoiceEffect
     ApplyKnowledgeCurse,
 
     /// <summary>
+    /// 概率分支模式下的怪物随机分支决议：镜像不掷骰，改为挂起"候选×权重"需求，搜索按概率分支，
+    /// 选中的分支结果经计划列表回放时强制生效（同 ApplyKnowledgeCurse 的计划内直读模式）。
+    /// </summary>
+    MonsterBranch,
+
+    /// <summary>
     /// 结算由登记方负责的选择。求解器只负责展开分支、把选中的结果记进计划、部署时应答原生页面；
     /// 效果由 <see cref="PotionChoiceMirrors"/> 登记的 apply 施加。求解器自己从不产生这个值。
     /// </summary>

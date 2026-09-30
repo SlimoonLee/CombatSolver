@@ -13,18 +13,11 @@ internal static class MonsterRandomBranchResolver
         Rng rng,
         Func<RandomBranchState.StateWeight, float>? baseWeight = null)
     {
-        List<(RandomBranchState.StateWeight State, float Weight)> weighted = new(branch.States.Count);
-        float total = 0f;
-        foreach (RandomBranchState.StateWeight state in branch.States)
-        {
-            float weight = RepeatWeight(machine, state, stateLog)
-                * (baseWeight?.Invoke(state) ?? state.GetWeight());
-            weighted.Add((state, weight));
-            total += weight;
-        }
+        (List<(RandomBranchState.StateWeight State, float Weight)> weighted, float total) =
+            WeightedCandidates(machine, branch, stateLog, baseWeight);
 
-        // Vanilla intentionally still calls NextFloat(0). Its selection loop then returns the
-        // first branch because the zero roll remains <= 0 after subtracting a zero weight.
+        // Vanilla intentionally still calls NextFloat(total). Its selection loop then returns the
+        // first branch when the zero-total roll remains <= 0 after subtracting a zero weight.
         float roll = rng.NextFloat(total);
         foreach ((RandomBranchState.StateWeight state, float weight) in weighted)
         {
@@ -35,6 +28,45 @@ internal static class MonsterRandomBranchResolver
 
         return weighted.LastOrDefault(item => item.Weight > 0f).State.stateId
             ?? throw new InvalidOperationException($"No valid state found in RandomBranchState {branch.Id}!");
+    }
+
+    /// <summary>
+    /// 概率分支模式的候选枚举：与 <see cref="Pick"/> 同一套权重（重复限制 × 基础权重 × 动态权重回调），
+    /// 纯函数、不消耗任何随机数流。权重未经归一化，调用方按总和归一。
+    /// </summary>
+    public static IReadOnlyList<(string StateId, float Weight)> Enumerate(
+        MonsterMoveStateMachine machine,
+        RandomBranchState branch,
+        IReadOnlyList<string> stateLog,
+        Func<RandomBranchState.StateWeight, float>? baseWeight = null)
+    {
+        (List<(RandomBranchState.StateWeight State, float Weight)> Weighted, float _) =
+            WeightedCandidates(machine, branch, stateLog, baseWeight);
+        List<(string StateId, float Weight)> candidates = new(Weighted.Count);
+        foreach ((RandomBranchState.StateWeight State, float Weight) item in Weighted)
+        {
+            candidates.Add((item.State.stateId, item.Weight));
+        }
+        return candidates;
+    }
+
+    private static (List<(RandomBranchState.StateWeight State, float Weight)> Weighted, float Total)
+        WeightedCandidates(
+        MonsterMoveStateMachine machine,
+        RandomBranchState branch,
+        IReadOnlyList<string> stateLog,
+        Func<RandomBranchState.StateWeight, float>? baseWeight)
+    {
+        List<(RandomBranchState.StateWeight State, float Weight)> weighted = new(branch.States.Count);
+        float total = 0f;
+        foreach (RandomBranchState.StateWeight state in branch.States)
+        {
+            float weight = RepeatWeight(machine, state, stateLog)
+                * (baseWeight?.Invoke(state) ?? state.GetWeight());
+            weighted.Add((state, weight));
+            total += weight;
+        }
+        return (weighted, total);
     }
 
     private static float RepeatWeight(

@@ -300,6 +300,9 @@ internal sealed partial class SimulatedCombatState
         if (PendingKnowledgeDemonChoice is not null)
             throw new InvalidOperationException(
                 $"Cannot fork with pending Knowledge Demon choice: {PendingKnowledgeDemonChoice.SourceId}.");
+        if (PendingMonsterBranchDemand is not null)
+            throw new InvalidOperationException(
+                $"Cannot fork with pending monster branch demand: {PendingMonsterBranchDemand.BranchId}.");
         if (_pendingPowerAmountChanges is { Count: > 0 })
         {
             throw new InvalidOperationException(

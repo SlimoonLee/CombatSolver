@@ -91,40 +91,75 @@ internal sealed partial class SimulatedCombatState
         (_monsterAiStates ??= [])[creature] = BranchMonsterAi.Advance(current, simulator, this);
     }
 
-    public void PrepareMonsterMovesForNextRound(
+    /// <summary>
+    /// 概率分支模式推进：随机分支不掷骰；产生"候选×权重"挂起需求时返回 false，
+    /// 调用方以挂起边界结束本次推进（计划列表回放时携带钉扎决议）。
+    /// </summary>
+    public bool AdvanceMonsterAiWithBranchPlan(
+        Creature creature,
         CombatPredictionSimulator simulator,
-        IReadOnlyDictionary<Creature, MoveState> performedMoves)
+        IReadOnlyList<PlanCardChoice>? plannedChoices)
     {
-        foreach (Creature enemy in Enemies)
-            PrepareMonsterMoveForNextRound(simulator, enemy, performedMoves.GetValueOrDefault(enemy));
+        BranchMonsterAiState current = GetMonsterAiState(creature);
+        BranchMonsterAiState? advanced = BranchMonsterAi.AdvanceWithBranchPlan(
+            current,
+            simulator,
+            this,
+            plannedChoices);
+        if (advanced == null)
+            return false;
+        (_monsterAiStates ??= [])[creature] = advanced;
+        return true;
     }
 
-    public void PrepareMonsterMoveForNextRound(
+    public bool PrepareMonsterMovesForNextRound(
+        CombatPredictionSimulator simulator,
+        IReadOnlyDictionary<Creature, MoveState> performedMoves,
+        IReadOnlyList<PlanCardChoice>? plannedChoices = null,
+        bool probabilityBranches = false)
+    {
+        foreach (Creature enemy in Enemies)
+        {
+            if (!PrepareMonsterMoveForNextRound(simulator, enemy, performedMoves.GetValueOrDefault(enemy),
+                    plannedChoices, probabilityBranches))
+                return false;
+        }
+        return true;
+    }
+
+    public bool PrepareMonsterMoveForNextRound(
         CombatPredictionSimulator simulator,
         Creature enemy,
-        MoveState? performedMove)
+        MoveState? performedMove,
+        IReadOnlyList<PlanCardChoice>? plannedChoices = null,
+        bool probabilityBranches = false)
     {
         if (!ContainsCreature(enemy) || !CanPerformMonsterMove(simulator, enemy))
-            return;
+            return true;
         if (enemy.Monster == null)
-            return;
+            return true;
         BranchMonsterAiState current = GetMonsterAiState(enemy);
         if (current.NeedsInitialRoll)
         {
             (_monsterAiStates ??= [])[enemy] = BranchMonsterAi.RollInitial(current, simulator, this);
-            return;
+            return true;
         }
         // Newly summoned creatures retain an already selected first move until they act.
         if (performedMove == null)
-            return;
+            return true;
         if (current.Current.Id == "STUNNED" && WillSkipNextMove(enemy))
-            return;
+            return true;
         if (current.Current.MustPerformOnceBeforeTransitioning
             && !ReferenceEquals(performedMove, current.Current))
         {
-            return;
+            return true;
         }
-        AdvanceMonsterAi(enemy, simulator);
+        if (!probabilityBranches)
+        {
+            AdvanceMonsterAi(enemy, simulator);
+            return true;
+        }
+        return AdvanceMonsterAiWithBranchPlan(enemy, simulator, plannedChoices);
     }
 
     public void RegisterMonsterAi(Creature creature, MoveState current)

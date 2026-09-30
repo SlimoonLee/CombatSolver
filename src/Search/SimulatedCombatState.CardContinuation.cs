@@ -20,7 +20,8 @@ internal sealed partial class SimulatedCombatState : ICombatPredictionCardContin
         && _activeActionChoiceTiming == PlanChoiceTiming.Action
         && _cardExecutionScopeDepth == 1 && _activeCardExecutionDeaths != null
         && !_playerTurnEndRequested && _powerCardSources is not { Count: > 0 }
-        && PendingKnowledgeDemonChoice is null && _pendingPowerAmountChanges is not { Count: > 0 }
+        && PendingKnowledgeDemonChoice is null && PendingMonsterBranchDemand is null
+        && _pendingPowerAmountChanges is not { Count: > 0 }
         && _unsettlingLampTriggeringCards is not { Count: > 0 }
         && _unsettlingLampInternalPowerTypes is not { Count: > 0 }
         && HasOwnManualChoiceRequest;

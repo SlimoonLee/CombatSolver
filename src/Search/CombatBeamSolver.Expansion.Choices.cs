@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -893,6 +894,14 @@ internal sealed partial class CombatBeamSolver
 
         SimulatedCombatState combat =
             (SimulatedCombatState)snapshot.Simulator.State.CombatState;
+        if (combat.PendingMonsterBranchDemand is { } branchDemand)
+        {
+            // 概率分支模式：语义宽度即候选数（权重质量界由批次 2 的聚合消费）。
+            return new PendingChoiceBudgetSeed(
+                Spec: null,
+                SemanticBranchCount: branchDemand.Candidates.Count,
+                TurnSetupLayer: null);
+        }
         if (combat.PendingKnowledgeDemonChoice is { } knowledgeRequest)
         {
             IReadOnlyList<PlanCardChoice> knowledgeBranches =
@@ -1102,6 +1111,34 @@ internal sealed partial class CombatBeamSolver
         ChoiceOccurrenceCollector<DeferredOccurrenceChoiceBranch> occurrenceCollector)
     {
         SimulatedCombatState combat = (SimulatedCombatState)snapshot.Simulator.State.CombatState;
+        if (combat.PendingMonsterBranchDemand is { } branchDemand)
+        {
+            // 概率分支模式：怪物随机分支的每个候选一条分支，权重进 token.Title（归一化概率，
+            // 批次 2 的聚合消费）；决议经计划列表回放时由 MonsterBranchResolutionSupport 强制生效。
+            float totalWeight = branchDemand.Candidates.Sum(candidate => Math.Max(0f, candidate.Weight));
+            List<PendingChoiceReplayBranch> branchPlan = new(branchDemand.Candidates.Count);
+            foreach ((string stateId, float weight) in branchDemand.Candidates)
+            {
+                float normalized = totalWeight > 0f
+                    ? Math.Max(0f, weight) / totalWeight
+                    : 1f / branchDemand.Candidates.Count;
+                PlanCardChoice branch = new(
+                    PlanChoiceEffect.MonsterBranch,
+                    PileType.None,
+                    [new PlanCardToken(stateId, 0, string.Empty, 0, 0,
+                        normalized.ToString("R", CultureInfo.InvariantCulture))],
+                    MonsterBranchResolutionSupport.SourceId(branchDemand.Owner, branchDemand.BranchId),
+                    Timing: PlanChoiceTiming.EnemyTurn);
+                IReadOnlyList<PlanCardChoice> existing = action.TurnStartChoices ?? [];
+                List<PlanCardChoice> next = new(existing.Count + 1);
+                next.AddRange(existing);
+                next.Add(branch);
+                branchPlan.Add(new PendingChoiceReplayBranch(
+                    action with { TurnStartChoices = next },
+                    PruneInvalidBranch: true));
+            }
+            return new PendingChoiceReplayLayer(branchPlan);
+        }
         if (combat.PendingKnowledgeDemonChoice is { } knowledgeRequest)
         {
             IReadOnlyList<PlanCardChoice> branches = KnowledgeDemonChoiceSupport.BuildChoices(

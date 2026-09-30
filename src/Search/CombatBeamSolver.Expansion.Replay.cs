@@ -985,7 +985,7 @@ internal sealed partial class CombatBeamSolver
             return SearchBoundaryReason.None;
         SimPlayerCombatState playerState = simulator.State.GetPlayerCombatState(_player);
         IReadOnlyList<PlanCardChoice>? roundChoicePlans = turnStartChoices?
-            .Where(choice => choice.Effect != PlanChoiceEffect.ApplyKnowledgeCurse)
+            .Where(choice => choice.Effect is not (PlanChoiceEffect.ApplyKnowledgeCurse or PlanChoiceEffect.MonsterBranch))
             .ToArray();
         TurnStartChoiceCursor roundChoices = observedChoicePolicy == null
             ? new(roundChoicePlans)
@@ -1237,7 +1237,12 @@ internal sealed partial class CombatBeamSolver
             }
             if (simulator.CheckWinCondition(simulatedCombat.GetPlayerTurnNumber(_player)))
                 return SearchBoundaryReason.None;
-            simulatedCombat.PrepareMonsterMovesForNextRound(simulator, performedMoves);
+            if (!simulatedCombat.PrepareMonsterMovesForNextRound(simulator, performedMoves,
+                    turnStartChoices, _probabilityBranches))
+            {
+                // 概率分支模式：怪物随机分支挂起"候选×权重"需求，由分支层展开。
+                return SearchBoundaryReason.PendingChoice;
+            }
         }
         else
         {

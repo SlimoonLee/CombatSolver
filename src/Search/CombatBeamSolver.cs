@@ -51,6 +51,7 @@ internal sealed partial class CombatBeamSolver(
         policy.MeasurePhasePerformance,
         policy.FramePressureSignal);
     private readonly bool _includeTurnSetup = policy.IncludeTurnSetup;
+    private readonly bool _probabilityBranches = policy.ProbabilityBranches;
     private readonly Player _player = root.PlayerIdentity;
     private readonly IntentForecast _forecast = root.Forecast;
     private readonly int _startTurnNumber = root.StartTurnNumber;

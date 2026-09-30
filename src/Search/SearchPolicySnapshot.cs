@@ -30,6 +30,11 @@ internal sealed record SearchPolicySnapshot(
     /// combat; the outer executable trajectory owns the full-combat potion accounting.
     /// </summary>
     public bool ZeroInheritedPotionUse { get; init; }
+    /// <summary>
+    /// 概率分支模式：怪物随机分支不掷骰，镜像挂起"候选×权重"需求由搜索按概率分支展开，
+    /// 选中的分支结果经计划列表回放时强制生效；影子世界不消费 MonsterAi 随机数流。
+    /// </summary>
+    public bool ProbabilityBranches { get; init; }
     public NoveltySearchOptions? NoveltySearch { get; init; }
     public NoveltyPortfolioBudget NoveltyBudget { get; init; } = NoveltyPortfolioBudget.Default;
     public bool Act3BossStrategy { get; init; }

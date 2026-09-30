@@ -465,6 +465,8 @@ internal static class ModRuntime
         SolverSettingsSnapshot settings = SolverSettings.Capture();
         SearchPolicySnapshot policy = SolverController.CaptureSearchPolicy(
             settings, state, includeTurnSetup: false, theftPolicy: null);
+        if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_PROBABILITY_BRANCHES") == "1")
+            policy = policy with { ProbabilityBranches = true };
         policy = policy with { Profile = policy.Profile with
         {
             BaseScoreOnly = options.Ordering == "base",

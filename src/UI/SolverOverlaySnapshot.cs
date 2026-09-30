@@ -481,7 +481,7 @@ internal sealed record SolverOverlaySnapshot(
     }
 
     private static IReadOnlyList<string> FormatTurnStartChoices(IEnumerable<PlanCardChoice> choices)
-        => choices.Where(choice => choice.Effect != PlanChoiceEffect.ApplyKnowledgeCurse)
+        => choices.Where(choice => choice.Effect is not (PlanChoiceEffect.ApplyKnowledgeCurse or PlanChoiceEffect.MonsterBranch))
             .Select(FormatTurnStartChoice)
             .ToArray();
 

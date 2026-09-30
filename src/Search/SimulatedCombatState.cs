@@ -575,7 +575,7 @@ internal sealed partial class SimulatedCombatState
             ? null
             : _encounterSlots.LastOrDefault(
                 slot => _enemies.All(creature => creature.SlotName != slot));
-    public bool HasPendingChoice => PendingTurnStartChoice != null || PendingKnowledgeDemonChoice != null;
+    public bool HasPendingChoice => PendingTurnStartChoice != null || PendingKnowledgeDemonChoice != null || PendingMonsterBranchDemand != null;
     public event Action<ICombatState>? CreaturesChanged
     {
         add { }

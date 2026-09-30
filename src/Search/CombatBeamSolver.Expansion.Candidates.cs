@@ -1033,7 +1033,7 @@ internal sealed partial class CombatBeamSolver
             // turn to end runs in AdvanceRound - after EndActionChoices has already asserted this cursor. Leaving
             // them here makes AssertConsumed report a choice that was never this cursor's to take.
             choices.AddRange(action.TurnStartChoices
-                .Where(choice => choice.Effect != PlanChoiceEffect.ApplyKnowledgeCurse));
+                .Where(choice => choice.Effect is not (PlanChoiceEffect.ApplyKnowledgeCurse or PlanChoiceEffect.MonsterBranch)));
         }
         return choices.Count == 0 ? null : choices;
     }

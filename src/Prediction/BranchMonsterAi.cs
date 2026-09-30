@@ -179,6 +179,33 @@ internal static class BranchMonsterAi
         SimulatedCombatState combat)
     {
         Rng rng = simulator.Rng.MonsterAi;
+        return AdvanceCore(source, simulator, combat, rng, probabilityBranches: false, plannedChoices: null)
+            ?? throw new InvalidOperationException(
+                $"怪物 {source.Monster.Id.Entry} 在确定性推进中不应产生概率分支需求。");
+    }
+
+    /// <summary>
+    /// 概率分支模式推进：随机分支不掷骰——计划列表携带钉扎决议时强制生效，
+    /// 否则挂起"候选×权重"需求并返回 null（调用方以挂起边界结束本次推进）。
+    /// 全程不消耗 MonsterAi 随机数流。
+    /// </summary>
+    public static BranchMonsterAiState? AdvanceWithBranchPlan(
+        BranchMonsterAiState source,
+        CombatPredictionSimulator simulator,
+        SimulatedCombatState combat,
+        IReadOnlyList<PlanCardChoice>? plannedChoices)
+    {
+        return AdvanceCore(source, simulator, combat, rng: null, probabilityBranches: true, plannedChoices);
+    }
+
+    private static BranchMonsterAiState? AdvanceCore(
+        BranchMonsterAiState source,
+        CombatPredictionSimulator simulator,
+        SimulatedCombatState combat,
+        Rng? rng,
+        bool probabilityBranches,
+        IReadOnlyList<PlanCardChoice>? plannedChoices)
+    {
         MonsterMoveStateMachine machine = source.Machine;
         int knowledgeCounter = source.KnowledgeDemonCurseCounter;
         List<string> log = new(source.StateLog);
@@ -205,13 +232,45 @@ internal static class BranchMonsterAi
                     log.Add(move.Id);
                     return source with { Current = move, StateLog = log, KnowledgeDemonCurseCounter = knowledgeCounter };
                 case RandomBranchState random:
-                    nextState = machine.States[MonsterRandomBranchResolver.Pick(
-                        machine,
-                        random,
-                        log,
-                        rng,
-                        state => GetBranchWeight(state, random.Id, source, combat))];
+                {
+                    if (probabilityBranches)
+                    {
+                        IReadOnlyList<(string StateId, float Weight)> candidates =
+                            MonsterRandomBranchResolver.Enumerate(
+                                machine,
+                                random,
+                                log,
+                                state => GetBranchWeight(state, random.Id, source, combat));
+                        string? pinned = MonsterBranchResolutionSupport.ResolvePinned(
+                            source.Monster.Creature,
+                            random,
+                            candidates,
+                            plannedChoices);
+                        if (pinned == null)
+                        {
+                            MonsterBranchResolutionSupport.RaisePending(
+                                combat,
+                                source.Monster.Creature,
+                                random,
+                                candidates);
+                            return null;
+                        }
+                        nextState = machine.States[pinned];
+                    }
+                    else
+                    {
+                        nextState = machine.States[MonsterRandomBranchResolver.Pick(
+                            machine,
+                            random,
+                            log,
+                            rng
+                                ?? throw new InvalidOperationException(
+                                    "确定性怪物分支推进缺少 MonsterAi 随机数流。"),
+                            state => GetBranchWeight(state, random.Id, source, combat))];
+                    }
+
                     break;
+                }
                 case ConditionalBranchState conditional:
                     nextState = machine.States[ResolveConditional(
                         conditional,
