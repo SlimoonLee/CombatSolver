@@ -1927,6 +1927,28 @@ internal static partial class SolverController
         RequestSearch(host, state, SearchReason.Manual);
     }
 
+    internal static void SetProbabilityBranches(NGame host, CombatState state, bool enabled)
+    {
+        AssertMainThread();
+        if (SolverSettings.Current.ProbabilityBranches == enabled)
+            return;
+        SolverSettings.Update(SolverSettings.Current with { ProbabilityBranches = enabled });
+        _combat.ContinuationSource = null;
+        _combat.PendingCompleteProjectionBaseline = null;
+        _combat.LatestResult = null;
+        _combat.LatestStamp = null;
+        if (_deployment != null)
+            return;
+        _combat.LatestResult = null;
+        _combat.LatestStamp = null;
+        if (_combat.AutomaticSearchPaused || !AutomaticCalculationEnabled)
+        {
+            SolverOverlay.Show(host, SolverText.Get("无原生随机数模式设置已更改，请重新计算路线。"));
+            return;
+        }
+        RequestSearch(host, state, SearchReason.Manual);
+    }
+
     internal static void SetPotionRewardPrediction(NGame host, CombatState state, bool enabled)
     {
         AssertMainThread();

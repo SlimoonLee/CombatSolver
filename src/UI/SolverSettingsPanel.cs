@@ -19,6 +19,7 @@ internal sealed partial class SolverSettingsPanel : PanelContainer
 
     public event Action? ResetPositionRequested;
     public event Action<bool>? PotionRewardPredictionChanged;
+    public event Action<bool>? ProbabilityBranchesChanged;
 
     public SolverSettingsPanel()
     {

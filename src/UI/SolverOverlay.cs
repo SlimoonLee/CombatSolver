@@ -1766,6 +1766,7 @@ internal static class SolverOverlay
         };
         _settingsPanel.ResetPositionRequested += ResetOverlayPosition;
         _settingsPanel.PotionRewardPredictionChanged += OnPotionRewardPredictionChanged;
+        _settingsPanel.ProbabilityBranchesChanged += OnProbabilityBranchesChanged;
         primaryColumn.AddChild(_settingsPanel);
 
         _potionStrategyPanel = new SolverPotionStrategyPanel();
@@ -3612,6 +3613,16 @@ internal static class SolverOverlay
             SolverController.SetPotionRewardPrediction(host, state, enabled);
         else
             SolverSettings.Update(SolverSettings.Current with { PredictPotionReward = enabled });
+    }
+
+    private static void OnProbabilityBranchesChanged(bool enabled)
+    {
+        NGame? host = NGame.Instance;
+        CombatState? state = CombatManager.Instance.DebugOnlyGetState();
+        if (host != null && state != null && CombatManager.Instance.IsInProgress)
+            SolverController.SetProbabilityBranches(host, state, enabled);
+        else
+            SolverSettings.Update(SolverSettings.Current with { ProbabilityBranches = enabled });
     }
 
     private static void OnPotionPresetRequested(PotionStrategyPreset preset)

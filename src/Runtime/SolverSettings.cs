@@ -94,6 +94,7 @@ internal sealed record SolverSettingsData
     public SolverPotionPolicy PotionPolicy { get; init; } = SolverPotionPolicy.Smart;
     public PersistedPotionDirective[] PotionDirectives { get; init; } = [];
     public bool PredictPotionReward { get; init; }
+    public bool ProbabilityBranches { get; init; }
     public bool RelicStrategyEnabled { get; init; } = true;
     public RelicCounterRule[] RelicCounterRules { get; init; } = [];
     public GrowthValues GrowthBudgets { get; init; }
@@ -341,6 +342,7 @@ internal static class SolverSettings
             UseNoveltyPortfolio = data.UseNoveltyPortfolio,
             UseEarlyTurnExploration = data.UseEarlyTurnExploration,
             PredictPotionReward = data.PredictPotionReward,
+            ProbabilityBranches = data.ProbabilityBranches,
         };
     }
 
