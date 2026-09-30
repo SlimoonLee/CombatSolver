@@ -4,6 +4,16 @@
 
 与现有确定性/盲模式并存，`SearchPolicySnapshot.ProbabilityBranches` 开关（默认关）；离线宿主用 `OFFLINE_HARNESS_PROBABILITY_BRANCHES=1`。
 
+## 已完成：零原生 RNG 接触的根捕获（提交 `6c70f8a`）
+
+模式开启时根捕获**零读写** `RunState.Rng`：
+
+- `SimulatedCombatState` 构造跳过 `ToSerializable`，影子基础九流由战斗局面派生种子构成（`DeriveNoRngSeed`：回合数/玩家数 SplitMix）；下游 `CreatePredictionRngSet`/monster.RunRng/ForkForSample 全部无感工作；
+- `IntentForecaster.Build` 概率模式不克隆原生 MonsterAi——随机分支按最高权重确定化（近似预报，入 ApproximationDetails），条件/状态分支的局部 `Rng(0)` 仅为原版签名；
+- `ContinuationStamp.CaptureLive/CapturePredicted` 增 `includeRng` 参数——捕获竞态检查在无 RNG 段的文本上比对；
+- `CombatRootSnapshot.Capture(..., probabilityBranches)` 线程化；`SolverSettingsSnapshot.ProbabilityBranches` + 两个运行时捕获调用点接线；
+- **实证**：`native-rng-counters.json` 记录搜索前后九条原生计数器逐位相同（`zeroContact=true`，雾菇冒烟 `9,0,0,0,0,0,0,0,1` 前后一致）——这是"完全不读/写"的直接证据。
+
 ## 已完成：批次 1 片 1（提交 `19bc6a0`）
 
 怪物随机分支概率化，端到端复用知识恶魔诅咒通道模式：
